@@ -13,7 +13,6 @@ def _():
     import seaborn as sns
 
     import zap
-    from zap.devices.injector import ARCHETYPES
     from zap.importers.pypsa import load_pypsa_network, parse_buses
     import os
     from pathlib import Path
@@ -23,7 +22,6 @@ def _():
     import geopandas as gpd
     return (
         ACLine,
-        ARCHETYPES,
         Path,
         cp,
         gpd,
@@ -82,12 +80,6 @@ def _(gpd, pn):
     pn.buses["state_fips"]  = j["STATEFP"]
     pn.buses["state_name"]  = j["STATE_NAME"]
     return b, counties, county_url, gdf, j
-
-
-@app.cell
-def _(pn):
-    pn.buses
-    return
 
 
 @app.cell
@@ -245,9 +237,21 @@ def _(pn, pypsa_bus_names):
 
 
 @app.cell
-def _(buses_to_index):
-    buses_to_index
-    return
+def _(np, pypsa_net, zap):
+    net = zap.PowerNetwork(num_nodes=3)
+
+
+    # DataCenterLoad using CSV profile
+    dcload = zap.DataCenterLoad(
+        num_nodes=pypsa_net.num_nodes,
+        terminal=np.array([0]),  # Connected to node 0
+        nominal_capacity=np.array([100.0]),  # 100 MW capacity
+        profiles=["development/load_profiles/example_inference_azure_conv.csv"],
+        linear_cost=np.array([5000.0]),  # $/MWh curtailment cost
+        time_resolution_hours=0.25,  # 15-minute intervals (matches CSV)
+        settime_horizon=24.0  # 24-hour horizon
+    )
+    return dcload, net
 
 
 @app.cell

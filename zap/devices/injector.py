@@ -394,7 +394,7 @@ class DataCenterLoad(AbstractInjector):
         all_profiles = []
         for i in range(num_dcs):
             if self.profiles is not None and i < len(self.profiles):
-                profile = self._load_profile(self.profiles[i])
+                profile = DataCenterLoad._load_profile(self.profiles[i])
             else:
                 raise ValueError(f"Profile not provided for data center {i}")
             all_profiles.append(profile)
@@ -453,7 +453,7 @@ class DataCenterLoad(AbstractInjector):
         return dev
 
 
-# @torch.jit.script
+@torch.jit.script
 def _admm_prox_update(power: list[torch.Tensor], rho: float, lin_cost, quad_cost, pmin, pmax):
     # Problem is
     #     min_p    a (p - pmin)^2 + b (p - pmin) + (rho / 2) || (p - power) ||_2^2 + {box constraints}

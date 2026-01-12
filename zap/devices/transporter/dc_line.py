@@ -1,6 +1,6 @@
 import numpy as np
 
-from zap.devices.abstract import make_dynamic
+from zap.devices.abstract import AbstractDevice, make_dynamic
 from zap.util import replace_none
 from .transporter import Transporter
 
@@ -53,6 +53,23 @@ class PowerLine(Transporter):
     @property
     def max_power(self):
         return self.capacity
+
+    def sample_time(self, time_periods, original_time_horizon):
+        # Skip Transporter.sample_time (which tries to set min_power/max_power properties)
+        # and call AbstractDevice.sample_time directly for capital cost scaling
+        dev = AbstractDevice.sample_time(self, time_periods, original_time_horizon)
+
+        # Subsample time-varying attributes
+        # Use modulo indexing if array is shorter than indices (e.g., single-year data
+        # being sampled across multi-year horizon)
+        if dev.capacity.shape[1] > 1:
+            cap_indices = np.array(time_periods) % dev.capacity.shape[1]
+            dev.capacity = dev.capacity[:, cap_indices]
+        if dev.linear_cost.shape[1] > 1:
+            cost_indices = np.array(time_periods) % dev.linear_cost.shape[1]
+            dev.linear_cost = dev.linear_cost[:, cost_indices]
+
+        return dev
 
 
 class DCLine(PowerLine):

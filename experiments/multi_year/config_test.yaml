@@ -1,0 +1,42 @@
+# Test configuration for multi-year stochastic planning experiment
+
+name: multi_year_test
+
+# Network files to load (from experiments/multi_year/data/)
+# If not specified, loads all .nc files in the data directory
+network_files:
+  - 2010_elec_s50_c7_ec_lv1.0_ERM-1h.nc
+  - 2011_elec_s50_c7_ec_lv1.0_ERM-1h.nc
+
+# Limit hours per year (optional, uses all hours if not specified)
+hours_per_year: 672  # 4 weeks per year for testing
+
+# Block sampling configuration
+block_size: 12  # Weekly blocks (168 hours = 1 week)
+sampling_strategy: random  # Use all blocks (no sampling)
+num_blocks: 10  # Only needed for 'random' or 'stratified' strategies
+
+# Solver configuration
+num_workers: 1  # Parallel workers (increase for large problems)
+
+# PyPSA import arguments
+pypsa_args:
+  power_unit: 1000.0
+  cost_unit: 10.0
+
+# Reproducibility
+seed: 42
+
+# Relaxation settings (convex relaxation for lower bound and initialization)
+relaxation:
+  should_solve: true
+  price_bound: 100.0
+
+# Gradient descent optimizer settings
+optimizer:
+  num_iterations: 50  # Number of gradient descent iterations
+  step_size: 0.001  # Learning rate
+  clip: 1000.0  # Gradient clipping threshold
+  initial_state: relaxation  # 'relaxation' or 'initial'
+  batch_size: 0  # 0 = use all subproblems per iteration
+  batch_strategy: sequential  # 'sequential' or 'fixed'

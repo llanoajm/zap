@@ -28,6 +28,7 @@ class PlanningProblemCVX(AbstractPlanningProblem):
         budget_constraints: Union[str, BudgetConstraintSet, None] = None,
     ):
         # Call super initializer
+        # Use property setter for deepcopy compatibility
         self.la = np
         self.regularize = regularize
         self.snapshot_weight = snapshot_weight

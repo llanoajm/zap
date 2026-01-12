@@ -4,6 +4,7 @@ import functools
 
 from zap.network import DispatchOutcome, PowerNetwork
 from zap.devices.abstract import AbstractDevice
+from zap.devices.injector import Load
 
 
 class AbstractOperationObjective:
@@ -132,6 +133,51 @@ class EmissionsObjective(AbstractOperationObjective):
         ]
 
         return sum(emissions)
+
+    @property
+    def is_convex(self):
+        return True
+
+    @property
+    def is_linear(self):
+        return True
+
+
+class UnservedEnergyObjective(AbstractOperationObjective):
+    """Total unserved energy across all Load devices.
+
+    Computes the difference between nominal load demand and actual power served.
+    For each Load device, unserved energy = load + power[0], where power[0] is
+    negative (consumption) and ranges from -load (full demand met) to 0 (no demand met).
+    """
+
+    def __init__(self, devices: list[AbstractDevice]):
+        self.devices = devices
+        self.load_indices = [i for i, d in enumerate(devices) if isinstance(d, Load)]
+
+        if getattr(devices[0], "torched", False):
+            self.torch_devices = devices
+            self.torched = True
+        else:
+            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
+            self.torched = False
+
+    def forward(self, y: DispatchOutcome, parameters=None, la=None):
+        if la is None:
+            la = torch if self.torched else np
+
+        devices = self.torch_devices if la == torch else self.devices
+
+        total_unserved = 0.0
+        for idx in self.load_indices:
+            load_device = devices[idx]
+            power = y.power[idx]
+            # Unserved = nominal load - actual served = load + power[0]
+            # (power[0] is negative, so this gives the shortfall)
+            unserved = load_device.load + power[0]
+            total_unserved = total_unserved + la.sum(unserved)
+
+        return total_unserved
 
     @property
     def is_convex(self):

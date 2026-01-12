@@ -2,6 +2,7 @@
 
 try:
     from zap.importers.pypsa import load_pypsa_network
+    from zap.importers.multi_year import MultiYearBlockSampler
 except ImportError:
     pass
 

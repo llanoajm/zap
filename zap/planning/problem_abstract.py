@@ -99,6 +99,29 @@ class AbstractPlanningProblem:
         return self.layer.time_horizon
 
     @property
+    def la(self):
+        """Return the array module (numpy or torch) based on stored name."""
+        if self._la_name == "numpy":
+            return np
+        elif self._la_name == "torch":
+            return torch
+        else:
+            raise ValueError(f"Unknown la module: {self._la_name}")
+
+    @la.setter
+    def la(self, value):
+        """Set the array module, storing as string for deepcopy compatibility.
+
+        Accepts either a module (np/torch) or a string name ("numpy"/"torch").
+        """
+        if value is np or value == "numpy":
+            self._la_name = "numpy"
+        elif value is torch or value == "torch":
+            self._la_name = "torch"
+        else:
+            raise ValueError(f"Unknown la module: {value}")
+
+    @property
     def num_subproblems(self):
         return 1
 
@@ -317,7 +340,8 @@ class StochasticPlanningProblem(AbstractPlanningProblem):
         weights: list[float] = None,
         budget_constraints: Union[str, BudgetConstraintSet, None] = None,
     ):
-        la = subproblems[0].la
+        # Use property setter for deepcopy compatibility
+        self.la = subproblems[0].la
 
         if weights is None:
             weights = [1.0 for _ in subproblems]
@@ -337,14 +361,13 @@ class StochasticPlanningProblem(AbstractPlanningProblem):
         subproblems = [sub for sub, w in zip(subproblems, weights) if w > 0]
         weights = [w for w in weights if w > 0]
 
-        self.la = la
         self.subproblems = new_subproblems
         self.weights = new_weights
         self.layer = subproblems[0].layer
         self.num_workers = 1
 
         # Maximum of all sub problem lower bounds
-        if la == np:
+        if self.la is np:
             self.lower_bounds = {
                 k: np.max([sub.lower_bounds[k] for sub in self.subproblems], axis=0)
                 for k in subproblems[0].lower_bounds.keys()

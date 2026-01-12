@@ -81,6 +81,19 @@ class Transporter(AbstractDevice):
         if self.quadratic_cost is not None:
             self.quadratic_cost *= scale
 
+    def sample_time(self, time_periods, original_time_horizon):
+        dev = super().sample_time(time_periods, original_time_horizon)
+
+        # Subsample time-varying attributes
+        if dev.min_power.shape[1] > 1:
+            dev.min_power = dev.min_power[:, time_periods]
+        if dev.max_power.shape[1] > 1:
+            dev.max_power = dev.max_power[:, time_periods]
+        if dev.linear_cost.shape[1] > 1:
+            dev.linear_cost = dev.linear_cost[:, time_periods]
+
+        return dev
+
     # ====
     # CORE MODELING FUNCTIONS
     # ====

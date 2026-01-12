@@ -1,3 +1,4 @@
+import math
 import torch
 import numpy as np
 import functools
@@ -140,3 +141,53 @@ class EmissionsObjective(AbstractOperationObjective):
     @property
     def is_linear(self):
         return True
+
+
+class LMPObjective(AbstractOperationObjective):
+    """Metric of dispatch LMPs."""
+
+    def __init__(self, net: PowerNetwork, devices: list[AbstractDevice], lmp_metric: str = "max"):
+        self.net = net
+        self.devices = devices
+        self.lmp_metric = lmp_metric
+
+        if getattr(devices[0], "torched", False):
+            self.torch_devices = devices
+            self.torched = True
+        else:
+            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
+            self.torched = False
+
+    def forward(self, y: DispatchOutcome, parameters=None, la=None):
+        if la is None:
+            la = torch if self.torched else np
+
+        devices = self.torch_devices if la == torch else self.devices
+        lmps = y.prices
+        if self.lmp_metric == "l2":
+            return la.mean(lmps**2)
+        elif self.lmp_metric == "l1":
+            return la.sum(la.abs(lmps))
+        elif self.lmp_metric == "max":
+            return la.max(lmps)
+        elif self.lmp_metric == "cvar":
+            alpha = 0.95
+            if la is torch:
+                sorted_x, _ = torch.sort(lmps)  # ascending
+                n = sorted_x.numel()
+            else:
+                sorted_x = np.sort(lmps)
+                n = sorted_x.size
+
+            # CVaR_alpha = mean of worst (1-alpha) tail
+            k = int(math.floor(alpha * n))
+            k = min(max(k, 0), n - 1)  # clamp to valid
+            return sorted_x[k:].mean()
+
+    @property
+    def is_convex(self):
+        return True
+
+    @property
+    def is_linear(self):
+        return False

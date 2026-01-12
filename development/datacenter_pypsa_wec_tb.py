@@ -20,8 +20,9 @@ def _():
     import zap
     from zap.devices import DataCenterLoad
     from zap.importers.pypsa import load_pypsa_network, parse_buses
-
+    from zap.devices import ACLine
     return (
+        ACLine,
         DataCenterLoad,
         Path,
         cp,
@@ -48,6 +49,12 @@ def _(os, pypsa):
     snapshots = pn.generators_t.p_max_pu.index
     snapshot_data = snapshots[5616:5640]  # 8/23/21
     return HOME_PATH, PYPSA_NETW0RK_PATH, pn, snapshot_data, snapshots
+
+
+@app.cell
+def _(HOME_PATH):
+    print(HOME_PATH)
+    return
 
 
 @app.cell
@@ -582,7 +589,6 @@ def _(dispatch_costs, investment_costs, plt):
 @app.cell
 def _():
     from matplotlib.ticker import ScalarFormatter
-
     return (ScalarFormatter,)
 
 
@@ -629,7 +635,6 @@ def _(np, plt):
         plt.tight_layout()
         plt.savefig("pareto_optimal_allocations.pdf")
         return fig
-
     return (plot_pareto_tradeoff,)
 
 

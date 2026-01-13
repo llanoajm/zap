@@ -16,3 +16,6 @@ build/
 gurobi.log
 
 local*
+
+./development/load_profiles/batch_process.py
+./development/load_profiles/plot_profiles.py

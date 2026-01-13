@@ -130,9 +130,14 @@ class AbstractInjector(AbstractDevice):
     def sample_time(self, time_periods, original_time_horizon):
         dev = super().sample_time(time_periods, original_time_horizon)
 
-        # Subsample linear cost
+        factor = time_periods // original_time_horizon
         if dev.linear_cost.shape[1] > 1:
-            dev.linear_cost = dev.linear_cost[:, time_periods]
+            if factor > 1:
+                # Upsample
+                dev.linear_cost = np.ascontiguousarray(np.repeat(dev.linear_cost, factor, axis=1))
+            else:
+                # Subsample linear cost
+                dev.linear_cost = dev.linear_cost[:, time_periods]
 
         return dev
 
@@ -309,8 +314,16 @@ class Generator(AbstractInjector):
     def sample_time(self, time_periods, original_time_horizon):
         dev = super().sample_time(time_periods, original_time_horizon)
 
+        factor = time_periods // original_time_horizon
         if dev.dynamic_capacity.shape[1] > 1:
-            dev.dynamic_capacity = dev.dynamic_capacity[:, time_periods]
+            if factor > 1:
+                # Upsample
+                dev.dynamic_capacity = np.ascontiguousarray(
+                    np.repeat(dev.dynamic_capacity, factor, axis=1)
+                )
+            else:
+                # Subsample dynamic capacity
+                dev.dynamic_capacity = dev.dynamic_capacity[:, time_periods]
 
         return dev
 
@@ -342,8 +355,14 @@ class Load(AbstractInjector):
     def sample_time(self, time_periods, original_time_horizon):
         dev = super().sample_time(time_periods, original_time_horizon)
 
+        factor = time_periods // original_time_horizon
         if dev.load.shape[1] > 1:
-            dev.load = dev.load[:, time_periods]
+            if factor > 1:
+                # Upsample
+                dev.load = np.ascontiguousarray(np.repeat(dev.load, factor, axis=1))
+            else:
+                # Subsample load
+                dev.load = dev.load[:, time_periods]
 
         return dev
 

@@ -39,15 +39,20 @@ def _():
 
 
 @app.cell
-def _(np):
+def upsample_zap_devices():
     def upsample_zap_devices(devices, factor=4, original_timesteps=24):
         """Upsample time-varying attributes of zap devices by repeating each timestep."""
+        upsampled_zap_devices = []
         for dev in devices:
-            for attr in ['dynamic_capacity', 'load', 'linear_cost']:
-                if hasattr(dev, attr):
-                    val = getattr(dev, attr)
-                    if val is not None and val.ndim == 2 and val.shape[1] == original_timesteps:
-                        setattr(dev, attr, np.repeat(val, factor, axis=1))
+            upsampled_dev = dev.sample_time(original_timesteps*factor, original_timesteps)
+            upsampled_zap_devices.append(upsampled_dev)
+
+        return upsampled_zap_devices
+            # for attr in ['dynamic_capacity', 'load', 'linear_cost']:
+            #     if hasattr(dev, attr):
+            #         val = getattr(dev, attr)
+            #         if val is not None and val.ndim == 2 and val.shape[1] == original_timesteps:
+            #             setattr(dev, attr, np.repeat(val, factor, axis=1))
     return (upsample_zap_devices,)
 
 
@@ -89,24 +94,18 @@ def _(load_pypsa_network, pn, snapshot_data, upsample_zap_devices):
         pn, snapshot_data, power_unit=1.0e3, cost_unit=100.0, **pypsa_kwargs
     )
 
-    upsample_zap_devices(pypsa_devices, factor=4, original_timesteps=24)
+    pypsa_devices = upsample_zap_devices(pypsa_devices, factor=4, original_timesteps=24)
     return pypsa_devices, pypsa_kwargs, pypsa_net
 
 
 @app.cell
 def _(np, pypsa_devices):
-    props = vars(pypsa_devices[1])
+    props = vars(pypsa_devices[2])
 
-    for k,v in props.items():
-        if isinstance(v, np.ndarray):
-            print(f"{k} has dimension: {v.shape}" )
-    return k, props, v
-
-
-@app.cell
-def _(props):
-    props
-    return
+    for key,val in props.items():
+        if isinstance(val, np.ndarray):
+            print(f"{key} has dimension: {val.shape}" )
+    return key, props, val
 
 
 @app.cell
@@ -152,24 +151,6 @@ def _(ACLine, np, zap):
 def _(calculate_ptdf, pypsa_devices, pypsa_net):
     ptdf = calculate_ptdf(pypsa_net, pypsa_devices)
     return (ptdf,)
-
-
-@app.cell
-def _(ptdf):
-    ptdf.shape
-    return
-
-
-@app.cell
-def _(pypsa_devices):
-    pypsa_devices[2]
-    return
-
-
-@app.cell
-def _(pypsa_devices):
-    pypsa_devices[0].linear_cost.shape
-    return
 
 
 @app.cell
@@ -230,32 +211,228 @@ def _(Fmax, f, np, parse_buses, pn, ptdf):
 
 
 @app.cell
-def _(pn, pypsa_bus_names):
-    county_fips = pn.buses.loc[pypsa_bus_names, "county_fips"]
-    county_fips
-    return (county_fips,)
+def _(index_to_bus):
+    index_to_bus
+    return
 
 
 @app.cell
-def _(np, pypsa_net, zap):
-    net = zap.PowerNetwork(num_nodes=3)
+def _(selected_node_fips):
+    selected_node_fips
+    return
 
 
-    # DataCenterLoad using CSV profile
-    dcload = zap.DataCenterLoad(
-        num_nodes=pypsa_net.num_nodes,
-        terminal=np.array([0]),  # Connected to node 0
-        nominal_capacity=np.array([100.0]),  # 100 MW capacity
-        profiles=["development/load_profiles/example_inference_azure_conv.csv"],
-        linear_cost=np.array([5000.0]),  # $/MWh curtailment cost
-        time_resolution_hours=0.25,  # 15-minute intervals (matches CSV)
-        settime_horizon=24.0  # 24-hour horizon
+@app.cell
+def _(pd, pn, pypsa_bus_names):
+    selected_node_fips = pn.buses.loc[pypsa_bus_names, "county_fips"]
+    county_land_lut_df = pd.read_csv("development/county_land_lut.csv")
+    return county_land_lut_df, selected_node_fips
+
+
+@app.cell
+def _(county_land_lut_df, index_to_bus, selected_node_fips):
+    # selected_node_fips is currently a Series: index=bus_name, values=county_fips
+    # Turn it into a DataFrame so we can add columns + merge
+    sel = selected_node_fips.rename("county_fips").to_frame()
+
+    # 1) add terminal column (bus -> terminal)
+    # NOTE: index_to_bus in your code is {terminal_idx -> bus_name}
+    # so invert it to get {bus_name -> terminal_idx}
+    bus_to_terminal = {bus: term for term, bus in index_to_bus.items()}
+    sel["terminal"] = sel.index.map(bus_to_terminal)
+
+    # 2) join with county_land_lut on FIPS
+    # make sure both are same dtype (often leading zeros matter, so use strings)
+    sel["county_fips"] = sel["county_fips"].astype(str).str.zfill(5)
+    county_land_lut_df["county_fips"] = county_land_lut_df["county_fips"].astype(str).str.zfill(5)
+
+    sel = sel.merge(
+        county_land_lut_df,
+        left_on="county_fips",
+        right_on="county_fips",
+        how="left",
     )
-    return dcload, net
+
+    # 3) "cost for each terminal"
+    # Replace "cost" with the actual column name in county_land_lut_df (e.g., 'land_cost', 'usd_per_mw', etc.)
+    terminal_cost = (
+        sel.groupby("terminal")["land_usd2017_per_acre"]
+          .first()   # or .mean(), depending on what you want
+          .sort_index()
+    )
+
+    sel, terminal_cost
+    return bus_to_terminal, sel, terminal_cost
+
+
+@app.cell
+def _(sel):
+    sel
+    return
+
+
+@app.cell
+def _(np, sel):
+    np.array(sel.terminal)
+    return
 
 
 @app.cell
 def _():
+    # net = zap.PowerNetwork(num_nodes=3)
+
+    # # DataCenterLoad using CSV profile
+    # dcload = zap.DataCenterLoad(
+    #     num_nodes=pypsa_net.num_nodes,
+    #     terminal=np.array([0]),  # Connected to node 0
+    #     nominal_capacity=np.array([100.0]),  # 100 MW capacity
+    #     profiles=["development/load_profiles/example_inference_azure_conv.csv"],
+    #     linear_cost=np.array([5000.0]),  # $/MWh curtailment cost
+    #     time_resolution_hours=0.25,  # 15-minute intervals (matches CSV)
+    #     capital_cost = []
+    #     settime_horizon=24.0  # 24-hour horizon
+    # )
+    return
+
+
+@app.cell
+def _(np, pypsa_devices, pypsa_net, sel, zap):
+    pypsa_devices_dc = pypsa_devices.copy()
+    dc_terminals = np.array(sel.terminal)
+    acres_per_mw = 0.56 # current guess at acres/MW, sweep later
+    fixed_capex_per_mw = 12e6 # capital gamma $/MW
+    inflation = 1.32
+    dc_captial_costs = np.array(sel.land_usd2017_per_acre)*inflation*acres_per_mw + fixed_capex_per_mw
+    n_dc = len(dc_terminals)
+    T = 24
+
+    dcloads = zap.DataCenterLoad(
+        num_nodes=pypsa_net.num_nodes,
+        terminal=dc_terminals,
+        profiles=n_dc*["development/load_profiles/example_inference_azure_conv.csv"],
+        nominal_capacity=np.ones((n_dc)),
+        linear_cost=np.ones(n_dc) * 5000.0,
+        settime_horizon=T,
+        capital_cost=dc_captial_costs,
+    )
+    pypsa_devices_dc.append(dcloads)
+    return (
+        T,
+        acres_per_mw,
+        dc_captial_costs,
+        dc_terminals,
+        dcloads,
+        fixed_capex_per_mw,
+        inflation,
+        n_dc,
+        pypsa_devices_dc,
+    )
+
+
+@app.cell
+def _(pypsa_devices):
+    type(pypsa_devices[0].dynamic_capacity)
+    return
+
+
+@app.cell
+def _(T, cp, n_dc, np, pypsa_devices_dc, pypsa_net, zap):
+    ## Try to write a simple exmaple of a planning problem
+    TOTAL_DC_BUDGET = 1000
+    # MW
+    xstar = zap.DispatchLayer(
+        pypsa_net,
+        pypsa_devices_dc,
+        parameter_names={"dc_capacity": (0, "nominal_capacity")},
+        time_horizon=T,
+        solver=cp.CLARABEL,
+    )  # Constuct a DispatchLayer
+
+    # lower_bounds = {}
+    # upper_bounds = {}
+    lower_bounds = {"dc_capacity": np.full(n_dc, 50)}
+    upper_bounds = {"dc_capacity": np.full(n_dc, 250)}
+
+    eta = {"dc_capacity": np.full(n_dc, TOTAL_DC_BUDGET / n_dc)}
+    init_eta = np.zeros(n_dc)
+    init_eta[0] = 1000
+    # init_eta = np.random.rand(n_dc) * 10
+    eta = {"dc_capacity": init_eta}
+
+    # op_obj = zap.planning.DispatchCostObjective(pypsa_net, pypsa_devices_dc)
+    # inv_obj = zap.planning.InvestmentObjective(pypsa_devices_dc, xstar)
+
+    # P = zap.planning.PlanningProblem(
+    #     operation_objective=op_obj,
+    #     investment_objective=inv_obj,
+    #     layer=xstar,
+    #     lower_bounds=lower_bounds,
+    #     upper_bounds=upper_bounds,
+    # )
+
+    # # Add in simplex constraint
+    # # P.extra_projections = {}
+    # P.extra_projections = {
+    #     "dc_capacity": zap.planning.SimplexBudgetProjection(
+    #         budget=TOTAL_DC_BUDGET, strict=True
+    #     )
+    # }
+
+    # cost = P(**eta, requires_grad=True)
+    # grad = P.backward()
+
+    # state = P.solve(num_iterations=100)
+    return TOTAL_DC_BUDGET, eta, init_eta, lower_bounds, upper_bounds, xstar
+
+
+@app.cell
+def _():
+    # from copy import deepcopy
+    # for i,d in enumerate(pypsa_devices_dc):
+    #     try:
+    #         d_copy = deepcopy(d)
+    #         d_torch = d.torchify(machine='cpu')
+    #     except Exception as e:
+    #         print('nope')
+    return
+
+
+@app.cell
+def _(pypsa_devices_dc):
+    d = pypsa_devices_dc[0]
+    from copy import deepcopy
+    return d, deepcopy
+
+
+@app.cell
+def _(d, deepcopy):
+    new_device = deepcopy(d)
+    return (new_device,)
+
+
+@app.cell
+def _(new_device, np):
+    import torch
+    machine = 'cpu'
+    TORCH_INTEGER_DTYPE = torch.int64
+    dtype = torch.float32
+    for k, v in new_device.__dict__.items():
+        if isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.number):
+            v_dtype = TORCH_INTEGER_DTYPE if np.issubdtype(v.dtype, np.integer) else dtype
+            new_device.__dict__[k] = torch.tensor(v, device=machine, dtype=v_dtype)
+    return TORCH_INTEGER_DTYPE, dtype, k, machine, torch, v, v_dtype
+
+
+@app.cell
+def _():
+    # for k, v in new_device.__dict__.items():
+    #     if isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.number):
+    #         v_dtype = TORCH_INTEGER_DTYPE if np.issubdtype(v.dtype, np.integer) else dtype
+    #         new_device.__dict__[k] = torch.tensor(v, device=machine, dtype=v_dtype)
+
+    #     elif isinstance(v, torch.Tensor):
+    #         v_dtype = TORCH_INTEGER_DTYPE if v.dtype in TORCH_INTEGER_TYPES else dtype
+    #         new_device.__dict__[k] = v.to(device=machine, dtype=v_dtype)
     return
 
 

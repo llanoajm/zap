@@ -185,7 +185,8 @@ def _(Fmax, f, np, parse_buses, pn, ptdf):
     # Conservative aggregation across time
     h_j = np.quantile(h_tj, 0.05, axis=0)                  # (N,)
 
-    top10_bus_idx = np.argsort(-h_j)[:10]
+    # top10_bus_idx = np.argsort(-h_j)[:10]
+    top10_bus_idx = [1, 15, 25]
     print("Top-10 bus indices by PTDF headroom:", top10_bus_idx)
     print("Top-10 scores:", h_j[top10_bus_idx])
 
@@ -302,22 +303,20 @@ def _(np, pypsa_devices, pypsa_net, sel, zap):
     acres_per_mw = 0.56 # current guess at acres/MW, sweep later
     fixed_capex_per_mw = 12e6 # capital gamma $/MW
     inflation = 1.32
-    dc_captial_costs = np.array(sel.land_usd2017_per_acre)*inflation*acres_per_mw + fixed_capex_per_mw
+    dc_captial_costs = np.array(sel.land_usd2017_per_acre)*inflation*acres_per_mw*0.0 #+ fixed_capex_per_mw
     n_dc = len(dc_terminals)
-    T = 24
 
     dcloads = zap.DataCenterLoad(
         num_nodes=pypsa_net.num_nodes,
         terminal=dc_terminals,
         profiles=n_dc*["development/load_profiles/example_inference_azure_conv.csv"],
-        nominal_capacity=np.ones((n_dc)),
-        linear_cost=np.ones(n_dc) * 5000.0,
-        settime_horizon=T,
+        nominal_capacity=1e-3 * np.ones((n_dc)),
+        linear_cost=np.ones(n_dc) * 500000.0,
+        settime_horizon=96,
         capital_cost=dc_captial_costs,
     )
     pypsa_devices_dc.append(dcloads)
     return (
-        T,
         acres_per_mw,
         dc_captial_costs,
         dc_terminals,
@@ -336,103 +335,87 @@ def _(pypsa_devices):
 
 
 @app.cell
-def _(T, cp, n_dc, np, pypsa_devices_dc, pypsa_net, zap):
+def _(cp, pypsa_devices_dc, pypsa_net):
+    outcome_test2 = pypsa_net.dispatch(
+        pypsa_devices_dc, time_horizon=96, solver=cp.CLARABEL, add_ground=False
+    )
+    return (outcome_test2,)
+
+
+@app.cell
+def _(pypsa_devices_dc):
+    for d_x in pypsa_devices_dc:
+        print(d_x.time_horizon)
+    return (d_x,)
+
+
+@app.cell
+def _(cp, n_dc, np, pypsa_devices_dc, pypsa_net, zap):
     ## Try to write a simple exmaple of a planning problem
-    TOTAL_DC_BUDGET = 1000
+    # pypsa_devices_dc = pypsa_devices
+    TOTAL_DC_BUDGET = 1
     # MW
     xstar = zap.DispatchLayer(
         pypsa_net,
         pypsa_devices_dc,
-        parameter_names={"dc_capacity": (0, "nominal_capacity")},
-        time_horizon=T,
+        parameter_names={"dc_capacity": (5, "nominal_capacity")},
+        time_horizon=96,
         solver=cp.CLARABEL,
     )  # Constuct a DispatchLayer
 
     # lower_bounds = {}
     # upper_bounds = {}
-    lower_bounds = {"dc_capacity": np.full(n_dc, 50)}
-    upper_bounds = {"dc_capacity": np.full(n_dc, 250)}
+    lower_bounds = {"dc_capacity": np.full(n_dc, 0)}
+    upper_bounds = {"dc_capacity": np.full(n_dc, 0.250)}
 
     eta = {"dc_capacity": np.full(n_dc, TOTAL_DC_BUDGET / n_dc)}
     init_eta = np.zeros(n_dc)
-    init_eta[0] = 1000
-    # init_eta = np.random.rand(n_dc) * 10
+    # init_eta[0] = 1000
+    init_eta = np.random.rand(n_dc)
     eta = {"dc_capacity": init_eta}
 
-    # op_obj = zap.planning.DispatchCostObjective(pypsa_net, pypsa_devices_dc)
-    # inv_obj = zap.planning.InvestmentObjective(pypsa_devices_dc, xstar)
+    op_obj = zap.planning.DispatchCostObjective(pypsa_net, pypsa_devices_dc)
+    inv_obj = zap.planning.InvestmentObjective(pypsa_devices_dc, xstar)
 
-    # P = zap.planning.PlanningProblem(
-    #     operation_objective=op_obj,
-    #     investment_objective=inv_obj,
-    #     layer=xstar,
-    #     lower_bounds=lower_bounds,
-    #     upper_bounds=upper_bounds,
-    # )
+    P = zap.planning.PlanningProblem(
+        operation_objective=op_obj,
+        investment_objective=inv_obj,
+        layer=xstar,
+        lower_bounds=lower_bounds,
+        upper_bounds=upper_bounds,
+    )
 
-    # # Add in simplex constraint
-    # # P.extra_projections = {}
-    # P.extra_projections = {
-    #     "dc_capacity": zap.planning.SimplexBudgetProjection(
-    #         budget=TOTAL_DC_BUDGET, strict=True
-    #     )
-    # }
+    # Add in simplex constraint
+    # P.extra_projections = {}
+    P.extra_projections = {
+        "dc_capacity": zap.planning.SimplexBudgetProjection(
+            budget=TOTAL_DC_BUDGET, strict=True
+        )
+    }
 
-    # cost = P(**eta, requires_grad=True)
-    # grad = P.backward()
+    cost = P(**eta, requires_grad=True)
+    grad = P.backward()
 
-    # state = P.solve(num_iterations=100)
-    return TOTAL_DC_BUDGET, eta, init_eta, lower_bounds, upper_bounds, xstar
-
-
-@app.cell
-def _():
-    # from copy import deepcopy
-    # for i,d in enumerate(pypsa_devices_dc):
-    #     try:
-    #         d_copy = deepcopy(d)
-    #         d_torch = d.torchify(machine='cpu')
-    #     except Exception as e:
-    #         print('nope')
-    return
-
-
-@app.cell
-def _(pypsa_devices_dc):
-    d = pypsa_devices_dc[0]
-    from copy import deepcopy
-    return d, deepcopy
+    state = P.solve(num_iterations=5)
+    return (
+        P,
+        TOTAL_DC_BUDGET,
+        cost,
+        eta,
+        grad,
+        init_eta,
+        inv_obj,
+        lower_bounds,
+        op_obj,
+        state,
+        upper_bounds,
+        xstar,
+    )
 
 
 @app.cell
-def _(d, deepcopy):
-    new_device = deepcopy(d)
-    return (new_device,)
-
-
-@app.cell
-def _(new_device, np):
-    import torch
-    machine = 'cpu'
-    TORCH_INTEGER_DTYPE = torch.int64
-    dtype = torch.float32
-    for k, v in new_device.__dict__.items():
-        if isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.number):
-            v_dtype = TORCH_INTEGER_DTYPE if np.issubdtype(v.dtype, np.integer) else dtype
-            new_device.__dict__[k] = torch.tensor(v, device=machine, dtype=v_dtype)
-    return TORCH_INTEGER_DTYPE, dtype, k, machine, torch, v, v_dtype
-
-
-@app.cell
-def _():
-    # for k, v in new_device.__dict__.items():
-    #     if isinstance(v, np.ndarray) and np.issubdtype(v.dtype, np.number):
-    #         v_dtype = TORCH_INTEGER_DTYPE if np.issubdtype(v.dtype, np.integer) else dtype
-    #         new_device.__dict__[k] = torch.tensor(v, device=machine, dtype=v_dtype)
-
-    #     elif isinstance(v, torch.Tensor):
-    #         v_dtype = TORCH_INTEGER_DTYPE if v.dtype in TORCH_INTEGER_TYPES else dtype
-    #         new_device.__dict__[k] = v.to(device=machine, dtype=v_dtype)
+def _(state):
+    state
     return
 
 

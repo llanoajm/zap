@@ -119,7 +119,8 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
     # We will only check 0GW, 1GW, 2 GW, 5GW
     # consider the metric max. Each terminal should have a [1x4 array]
 
-    dc_caps = [0, 1, 2]
+    # dc_caps = [0, 1, 2]
+    dc_caps = np.random.random(10) * 2.0
     load_scaling = 1.05
     # dc_caps = [30]
 
@@ -134,26 +135,31 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
 
     num_terminals = pypsa_net.num_nodes
 
+    results = []
+
+
     for terminal in range(num_terminals):
         dc_terminals = np.array([terminal])
         print(f'solving for terminal {terminal}')
+        dc_caps = np.random.random(10) * 2.0
         for cap_idx, dc_cap in enumerate(dc_caps):
+            dc_cap = np.round(dc_cap, 2)
             pypsa_devices_dc = deepcopy(pypsa_devices)
             pypsa_devices_dc[1].load *= load_scaling
             print(f'adding {dc_cap}GW')
-
-            if dc_cap == 0: # no need to repeatedly solve base case
-                node_price_t = outcome_base.prices[terminal, :]
-                max_node_price = np.max(node_price_t)
-                mean_node_price = np.mean(node_price_t)
-                dispatch_cost = outcome_base.problem.value
-                print(f'max node price over time: {max_node_price}')
-                print(f'mean node price over time: {mean_node_price}')
-                print(f'dispatch cost: {dispatch_cost}')
-                max_results[terminal, cap_idx] = max_node_price
-                mean_results[terminal, cap_idx] = mean_node_price
-                dispatch_cost_results[terminal, cap_idx] = dispatch_cost
-                continue
+            entry = {"terminal": terminal, "capacity (GW)": dc_cap}
+            # if dc_cap == 0: # no need to repeatedly solve base case
+            #     node_price_t = outcome_base.prices[terminal, :]
+            #     max_node_price = np.max(node_price_t)
+            #     mean_node_price = np.mean(node_price_t)
+            #     dispatch_cost = outcome_base.problem.value
+            #     print(f'max node price over time: {max_node_price}')
+            #     print(f'mean node price over time: {mean_node_price}')
+            #     print(f'dispatch cost: {dispatch_cost}')
+            #     max_results[terminal, cap_idx] = max_node_price
+            #     mean_results[terminal, cap_idx] = mean_node_price
+            #     dispatch_cost_results[terminal, cap_idx] = dispatch_cost
+            #     continue
             # Make data center
             dcloads = zap.DataCenterLoad(
                 num_nodes=pypsa_net.num_nodes,
@@ -174,18 +180,41 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
                 node_price_t = outcome_test.prices[terminal, :]
                 max_node_price = np.max(node_price_t)
                 mean_node_price = np.mean(node_price_t)
+                min_node_price = np.min(node_price_t)
                 dispatch_cost = outcome_test.problem.value
                 print(f'max node price over time: {max_node_price}')
                 print(f'mean node price over time: {mean_node_price}')
                 print(f'dispatch cost: {dispatch_cost}')
-                max_results[terminal, cap_idx] = max_node_price
-                mean_results[terminal, cap_idx] = mean_node_price
-                dispatch_cost_results[terminal, cap_idx] = dispatch_cost
+                entry.update({"Min": min_node_price,
+                              "Mean": mean_node_price,
+                              "Max": max_node_price,
+                              "P10": np.quantile(node_price_t, 0.1), 
+                              "P50": np.quantile(node_price_t, 0.5),
+                              "P90": np.quantile(node_price_t, 0.9),
+                              "P99": np.quantile(node_price_t, 0.99),
+                              "Variance": np.var(node_price_t),
+                              "Dispatch": dispatch_cost
+                             })
+                # max_results[terminal, cap_idx] = max_node_price
+                # mean_results[terminal, cap_idx] = mean_node_price
+                # dispatch_cost_results[terminal, cap_idx] = dispatch_cost
             except Exception as e:
                 print('infeasible!')
                 max_results[terminal, cap_idx] = np.nan
                 mean_results[terminal, cap_idx] = np.nan
                 dispatch_cost_results[terminal, cap_idx] = np.nan
+                entry.update({"Min": np.nan,
+                              "Mean": np.nan,
+                              "Max": np.nan,
+                              "P10": np.nan, 
+                              "P50": np.nan,
+                              "P90": np.nan,
+                              "P99": np.nan,
+                              "Variance": np.nan,
+                              "Dispatch": np.nan
+                             })
+            results.append(entry)
+            print(results)
     return (
         cap_idx,
         dc_cap,
@@ -194,11 +223,13 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
         dcloads,
         dispatch_cost,
         dispatch_cost_results,
+        entry,
         load_scaling,
         max_node_price,
         max_results,
         mean_node_price,
         mean_results,
+        min_node_price,
         n_dc,
         node_price_t,
         num_terminals,
@@ -206,6 +237,7 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
         outcome_test,
         pypsa_devices_base,
         pypsa_devices_dc,
+        results,
         terminal,
     )
 
@@ -247,8 +279,10 @@ def _(outcome_test):
 
 
 @app.cell
-def _():
-    return
+def _(pd, results):
+    df = pd.DataFrame(results)
+    df.to_csv("cloud_congestion.csv")
+    return (df,)
 
 
 if __name__ == "__main__":

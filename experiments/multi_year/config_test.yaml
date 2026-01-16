@@ -46,3 +46,10 @@ optimizer:
   initial_state: initial  # 'relaxation' or 'initial'
   batch_size: 8  # 0 = use all subproblems per iteration
   batch_strategy: sequential  # 'sequential' or 'fixed'
+
+# Export settings - apply optimized capacities to original PyPSA network
+# This takes the first input network file and updates the p_nom_opt values
+# for generators, storage_units, and links (s_nom_opt for lines) to reflect
+# the optimized capacities from the planning problem
+export:
+  should_export: false  # Set to true to export optimized network

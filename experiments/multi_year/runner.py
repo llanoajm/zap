@@ -199,6 +199,114 @@ def setup_parameter_names(devices: list) -> dict[str, tuple[int, str]]:
     return parameter_names
 
 
+def export_solved_network(
+    pypsa_network_path: Path,
+    devices: list,
+    parameter_names: dict[str, tuple[int, str]],
+    optimal_params: dict[str, np.ndarray],
+    pypsa_args: dict = None,
+) -> pypsa.Network:
+    """
+    Apply optimized capacities to a PyPSA network by updating p_nom_opt values.
+
+    This function:
+    1. Loads one of the original PyPSA network files
+    2. Updates p_nom_opt (or s_nom_opt) with the optimized capacities
+    3. Returns the modified network
+
+    Parameters
+    ----------
+    pypsa_network_path : Path
+        Path to the PyPSA network file to load and modify
+    devices : list
+        List of ZAP device objects (for mapping device names)
+    parameter_names : dict[str, tuple[int, str]]
+        Maps parameter name -> (device_index, attribute_name)
+    optimal_params : dict[str, np.ndarray]
+        Optimal parameter values from optimization
+    pypsa_args : dict, optional
+        PyPSA import arguments (power_unit, cost_unit, etc.)
+
+    Returns
+    -------
+    pypsa.Network
+        PyPSA network with optimized p_nom_opt values applied
+    """
+    if pypsa_args is None:
+        pypsa_args = DEFAULT_PYPSA_ARGS
+
+    power_unit = pypsa_args.get("power_unit", 1.0)
+
+    logger.info("=" * 60)
+    logger.info("Exporting optimized capacities to PyPSA network")
+    logger.info("=" * 60)
+
+    # Step 1: Load the PyPSA network
+    logger.info(f"Loading PyPSA network from {pypsa_network_path}")
+    network = pypsa.Network(str(pypsa_network_path))
+
+    # Step 2: Apply optimal parameters
+    logger.info("Applying optimized capacities...")
+
+    for param_name, param_value in optimal_params.items():
+        if param_name not in parameter_names:
+            continue
+
+        device_idx, attr_name = parameter_names[param_name]
+        device = devices[device_idx]
+
+        # Get device names (could be pd.Index or np.ndarray)
+        device_names = device.name
+        if isinstance(device_names, str):
+            device_names = [device_names]
+        elif hasattr(device_names, "tolist"):
+            device_names = device_names.tolist()
+
+        # Convert param_value to array
+        param_array = np.atleast_1d(param_value)
+
+        # Undo power unit scaling to get back to original units (MW)
+        param_array_scaled = param_array * power_unit
+
+        # Determine which PyPSA component and attribute to update
+        from zap.devices.injector import Generator
+        from zap.devices.transporter import DCLine, ACLine
+        from zap.devices.storage_unit import StorageUnit
+
+        if isinstance(device, Generator):
+            # Update generators p_nom_opt
+            for i, name in enumerate(device_names):
+                if name in network.generators.index:
+                    network.generators.loc[name, "p_nom_opt"] = param_array_scaled[i]
+                    logger.info(f"  Generator '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW")
+
+        elif isinstance(device, StorageUnit):
+            # Update storage_units p_nom_opt
+            for i, name in enumerate(device_names):
+                if name in network.storage_units.index:
+                    network.storage_units.loc[name, "p_nom_opt"] = param_array_scaled[i]
+                    logger.info(
+                        f"  StorageUnit '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW"
+                    )
+
+        elif isinstance(device, DCLine):
+            # Update links p_nom_opt
+            for i, name in enumerate(device_names):
+                if name in network.links.index:
+                    network.links.loc[name, "p_nom_opt"] = param_array_scaled[i]
+                    logger.info(f"  Link '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW")
+
+        elif isinstance(device, ACLine):
+            # Update lines s_nom_opt
+            for i, name in enumerate(device_names):
+                if name in network.lines.index:
+                    network.lines.loc[name, "s_nom_opt"] = param_array_scaled[i]
+                    logger.info(f"  Line '{name}': s_nom_opt = {param_array_scaled[i]:.2f} MVA")
+
+    logger.info("=" * 60)
+    return network
+
+
 def run_experiment(config: dict) -> dict:
     """
     Run a multi-year stochastic planning experiment.
@@ -431,12 +539,48 @@ def run_experiment(config: dict) -> dict:
         logger.info(f"  {name}: {value}")
 
     # -------------------------------------------------------------------------
+    # Step 10: Export solved network to PyPSA (optional)
+    # -------------------------------------------------------------------------
+    export_config = config.get("export", {})
+    should_export = export_config.get("should_export", False)
+    exported_network = None
+    export_path = None
+
+    if should_export:
+        logger.info("Exporting optimized capacities to PyPSA network...")
+        start_time = time.time()
+
+        # Use the first network file as the base
+        base_network_file = network_files[0] if network_files else None
+        if base_network_file is None:
+            logger.warning("No network files available for export. Skipping export.")
+        else:
+            base_network_path = EXPERIMENT_DATA_PATH / base_network_file
+
+            exported_network = export_solved_network(
+                pypsa_network_path=base_network_path,
+                devices=sampler.base_devices,
+                parameter_names=parameter_names,
+                optimal_params=optimal_params,
+                pypsa_args=pypsa_args,
+            )
+
+            export_time = time.time() - start_time
+            logger.info(f"Export took {export_time:.2f}s")
+
+            # Save the exported network
+            experiment_name = config.get("name", "experiment")
+            export_path = datadir(f"{experiment_name}_optimized_network.nc")
+            exported_network.export_to_netcdf(str(export_path))
+            logger.info(f"Optimized network saved to {export_path}")
+
+    # -------------------------------------------------------------------------
     # Cleanup
     # -------------------------------------------------------------------------
     if num_workers > 1:
         problem.shutdown_workers()
 
-    return {
+    result = {
         "config": config,
         "num_subproblems": problem.num_subproblems,
         "final_cost": float(final_cost),
@@ -457,6 +601,12 @@ def run_experiment(config: dict) -> dict:
         },
         "sampler_summary": sampler.summary(),
     }
+
+    if should_export:
+        result["export_path"] = str(export_path) if export_path else None
+        result["timing"]["export"] = export_time
+
+    return result
 
 
 # ============================================================================

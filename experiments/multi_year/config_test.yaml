@@ -17,7 +17,10 @@ sampling_strategy: all  # Use all blocks (no sampling)
 # num_blocks: 10  # Only needed for 'random' or 'stratified' strategies
 
 # Solver configuration
-num_workers: 1  # Parallel workers (increase for large problems)
+num_workers: 8  # Parallel workers (increase for large problems)
+dispatch_solver: CLARABEL  # Solver for inner dispatch problems (CLARABEL, MOSEK, GUROBI, ECOS, SCS)
+dispatch_solver_kwargs:
+  verbose: false
 
 # PyPSA import arguments
 pypsa_args:
@@ -31,12 +34,15 @@ seed: 42
 relaxation:
   should_solve: false
   price_bound: 100.0
+  solver: CLARABEL  # Solver for relaxation problem (CLARABEL, MOSEK, GUROBI, ECOS, SCS)
+  solver_kwargs:
+    verbose: false
 
 # Gradient descent optimizer settings
 optimizer:
-  num_iterations: 500  # Number of gradient descent iterations
+  num_iterations: 40  # Number of gradient descent iterations
   step_size: 0.001  # Learning rate
   clip: 1000.0  # Gradient clipping threshold
   initial_state: initial  # 'relaxation' or 'initial'
-  batch_size: 10  # 0 = use all subproblems per iteration
+  batch_size: 8  # 0 = use all subproblems per iteration
   batch_strategy: sequential  # 'sequential' or 'fixed'

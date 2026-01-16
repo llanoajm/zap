@@ -55,10 +55,10 @@ DEFAULT_PYPSA_ARGS = {
     "cost_unit": 10.0,
 }
 
-DEFAULT_SOLVER_ARGS = {
-    # Note: Don't pass solver here - it causes deepcopy issues
-    # Pass solver to RelaxedPlanningProblem instead
-}
+DEFAULT_DISPATCH_SOLVER = "CLARABEL"
+DEFAULT_DISPATCH_SOLVER_KWARGS = {"verbose": False}
+DEFAULT_RELAXATION_SOLVER = "CLARABEL"
+DEFAULT_RELAXATION_SOLVER_KWARGS = {"verbose": False}
 
 
 # ============================================================================
@@ -291,6 +291,12 @@ def run_experiment(config: dict) -> dict:
     logger.info("Creating StochasticPlanningProblem...")
     start_time = time.time()
 
+    # Get dispatch solver from config
+    dispatch_solver_name = config.get("dispatch_solver", DEFAULT_DISPATCH_SOLVER)
+    dispatch_solver = getattr(cp, dispatch_solver_name)
+    dispatch_solver_kwargs = config.get("dispatch_solver_kwargs", DEFAULT_DISPATCH_SOLVER_KWARGS)
+    logger.info(f"Using dispatch solver: {dispatch_solver_name}")
+
     def op_objective_fn(devices):
         return DispatchCostObjective(sampler.base_network, devices)
 
@@ -302,7 +308,8 @@ def run_experiment(config: dict) -> dict:
         parameter_names=parameter_names,
         operation_objective_fn=op_objective_fn,
         investment_objective_fn=inv_objective_fn,
-        **DEFAULT_SOLVER_ARGS,
+        solver=dispatch_solver,
+        solver_kwargs=dispatch_solver_kwargs,
     )
 
     problem_time = time.time() - start_time
@@ -327,11 +334,19 @@ def run_experiment(config: dict) -> dict:
         logger.info("Solving relaxed problem...")
         start_time = time.time()
 
+        # Get relaxation solver from config
+        relaxation_solver_name = relaxation_config.get("solver", DEFAULT_RELAXATION_SOLVER)
+        relaxation_solver = getattr(cp, relaxation_solver_name)
+        relaxation_solver_kwargs = relaxation_config.get(
+            "solver_kwargs", DEFAULT_RELAXATION_SOLVER_KWARGS
+        )
+        logger.info(f"Using relaxation solver: {relaxation_solver_name}")
+
         relaxation = RelaxedPlanningProblem(
             problem,
             max_price=relaxation_config.get("price_bound", 100.0),
-            solver=cp.MOSEK,
-            solver_kwargs={"verbose": False},
+            solver=relaxation_solver,
+            solver_kwargs=relaxation_solver_kwargs,
         )
         relaxed_params, relax_solve_data = relaxation.solve()
 

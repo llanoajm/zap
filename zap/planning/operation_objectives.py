@@ -146,7 +146,9 @@ class EmissionsObjective(AbstractOperationObjective):
 class LMPObjective(AbstractOperationObjective):
     """Metric of dispatch LMPs."""
 
-    def __init__(self, net: PowerNetwork, devices: list[AbstractDevice], lmp_metric: str = "max"):
+    def __init__(
+        self, net: PowerNetwork, devices: list[AbstractDevice], lmp_metric: str = "meanmax"
+    ):
         self.net = net
         self.devices = devices
         self.lmp_metric = lmp_metric
@@ -183,6 +185,11 @@ class LMPObjective(AbstractOperationObjective):
             k = int(math.floor(alpha * n))
             k = min(max(k, 0), n - 1)  # clamp to valid
             return sorted_x[k:].mean()
+        elif self.lmp_metric == "meanmax":
+            if la == torch:
+                return lmps.max(dim=1).values.mean()
+            else:
+                return np.mean(np.max(lmps, axis=1))
 
     @property
     def is_convex(self):

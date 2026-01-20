@@ -12,6 +12,8 @@ from zap.planning.operation_objectives import AbstractOperationObjective
 from .solvers import GradientDescent
 from .trackers import DEFAULT_TRACKERS, LOSS, TRACKER_MAPS
 
+# from zap.planning.problem_softmax import softmax_np
+
 
 class AbstractPlanningProblem:
     """Models long-term multi-value expansion planning."""
@@ -149,9 +151,18 @@ class AbstractPlanningProblem:
             if (self.iteration) % checkpoint_every == 0:
                 checkpoint_func(state, history)
 
+            # Project gradient onto simplex null space (preserves sum constraint)
+            # proj_grad = {k: grad[k] - self.la.mean(grad[k]) for k in grad}
+            print(grad)
+            proj_grad = {k: grad[k] - grad[k].mean() for k in grad}
+            print(proj_grad)
+
             # Gradient step and project
-            state = algorithm.step(state, grad)
+            state = algorithm.step(state, proj_grad)
+            # print("after step:", 5 * softmax_np(state["theta"]))
+
             state = self.project(state)
+            # print("after proj:", state["dc_capacity"])
 
             if self.la == torch:
                 state = {k: v.detach().clone() for k, v in state.items()}
@@ -166,11 +177,15 @@ class AbstractPlanningProblem:
             print(batch) if verbosity >= 2 else None
 
             J, grad = self.forward_and_back(**state, batch=batch)
+            # print("after fwd:", state["dc_capacity"])
 
             # Record stuff
             history = self.update_history(
                 history, trackers, J, grad, state, last_state, wandb, log_wandb_every
             )
+
+            print(state)
+            # print(5 * softmax_np(state["theta"]))
 
         return state, history
 
@@ -250,11 +265,11 @@ class AbstractPlanningProblem:
         if proj is not None:
             state[param] = proj(state[param])
             return state
-        for param in state.keys():
-            state[param] = self.la.clip(
-                state[param], self.lower_bounds[param], self.upper_bounds[param]
-            )
-        return state
+        # for param in state.keys():
+        #     state[param] = self.la.clip(
+        #         state[param], self.lower_bounds[param], self.upper_bounds[param]
+        #     )
+        # return state
 
     def get_state(self):
         return self.state

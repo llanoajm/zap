@@ -186,7 +186,7 @@ def _(Fmax, f, np, parse_buses, pn, ptdf):
     h_j = np.quantile(h_tj, 0.05, axis=0)                  # (N,)
 
     # top10_bus_idx = np.argsort(-h_j)[:10]
-    top10_bus_idx = [1, 15, 25]
+    top10_bus_idx = [i for i in range(101)]
     print("Top-10 bus indices by PTDF headroom:", top10_bus_idx)
     print("Top-10 scores:", h_j[top10_bus_idx])
 
@@ -268,7 +268,7 @@ def _(county_land_lut_df, index_to_bus, selected_node_fips):
 
 @app.cell
 def _(sel):
-    sel
+    sel.to_csv("terminal_land_cost_mapping.csv")
     return
 
 

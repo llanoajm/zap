@@ -214,7 +214,6 @@ def _(cp, deepcopy, np, pypsa_devices, pypsa_net, zap):
                               "Dispatch": np.nan
                              })
             results.append(entry)
-            print(results)
     return (
         cap_idx,
         dc_cap,

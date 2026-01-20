@@ -191,3 +191,157 @@ class LMPObjective(AbstractOperationObjective):
     @property
     def is_linear(self):
         return False
+
+
+class LineOverloadObjective(AbstractOperationObjective):
+    """
+    Penalize transmission line utilization above a threshold.
+
+    Uses the AC line flows from y.power[line_device_idx][1] with shape [L,T],
+    and nominal capacities from devices[line_device_idx].nominal_capacity.
+
+    Objective (default):
+        sum_{l in line_idx} sum_t relu(util[l,t] - thr)
+
+    Notes:
+    - differentiable when la=torch (uses torch.abs, torch.relu)
+    - works with numpy too
+    """
+
+    def __init__(
+        self,
+        devices: list[AbstractDevice],
+        line_device_idx: int = 3,  # your ACLine device index in y.power/devices
+        line_idx: np.ndarray | list[int] | None = None,
+        thr: float = 0.90,
+        use_mean_over_time: bool = False,  # if True: mean over time instead of sum over time
+    ):
+        self.devices = devices
+        self.line_device_idx = line_device_idx
+        self.line_idx = None if line_idx is None else np.asarray(line_idx, dtype=int)
+        self.thr = float(thr)
+        self.use_mean_over_time = bool(use_mean_over_time)
+
+        # torchify if needed (same pattern as your other objectives)
+        if getattr(devices[0], "torched", False):
+            self.torch_devices = devices
+            self.torched = True
+        else:
+            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
+            self.torched = False
+
+    def forward(self, y: DispatchOutcome, parameters=None, la=None):
+        if la is None:
+            la = torch if self.torched else np
+
+        devices = self.torch_devices if la == torch else self.devices
+
+        # line flows: you said y.power[3][1] is [L,T]
+        flows = y.power[self.line_device_idx][1]
+        caps = devices[self.line_device_idx].nominal_capacity.squeeze()  # [L,]
+
+        # utilization
+        util = la.abs(flows) / caps[:, None]
+
+        # optional subset of lines
+        if self.line_idx is not None:
+            util = util[self.line_idx, :]
+
+        # overload above threshold
+        overload = util - self.thr
+        if la == torch:
+            overload = torch.relu(overload)
+        else:
+            overload = np.maximum(overload, 0.0)
+
+        # aggregate
+        if self.use_mean_over_time:
+            return overload.mean()
+        else:
+            return overload.sum()
+
+    @property
+    def is_convex(self):
+        # abs is convex; relu is convex; sum preserves convexity
+        return True
+
+    @property
+    def is_linear(self):
+        return False
+
+
+class LineDeltaOverloadObjective(AbstractOperationObjective):
+    """
+    Penalize INCREASE in line utilization relative to a fixed base utilization profile.
+
+    J = sum_{l in line_idx} sum_t relu( util_plan[l,t] - max(util_base[l,t], thr) )
+
+    - If thr=None: compares purely vs base util (relu(util_plan - util_base))
+    - If thr is set (e.g. 0.90): only cares once base is below thr; uses max(base, thr)
+    """
+
+    def __init__(
+        self,
+        devices: list[AbstractDevice],
+        base_line_util,  # [L,T] numpy array (precomputed)
+        line_device_idx: int = 3,
+        line_idx=None,  # list/array of line indices (or None for all)
+        thr: float | None = 0.90,
+        use_mean_over_time: bool = False,
+    ):
+        self.devices = devices
+        self.base_line_util = np.asarray(base_line_util)
+        self.line_device_idx = line_device_idx
+        self.line_idx = None if line_idx is None else np.asarray(line_idx, dtype=int)
+        self.thr = thr
+        self.use_mean_over_time = bool(use_mean_over_time)
+
+        if getattr(devices[0], "torched", False):
+            self.torch_devices = devices
+            self.torched = True
+        else:
+            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
+            self.torched = False
+
+    def forward(self, y: DispatchOutcome, parameters=None, la=None):
+        if la is None:
+            la = torch if self.torched else np
+
+        devices = self.torch_devices if la == torch else self.devices
+
+        flows = y.power[self.line_device_idx][1]  # [L,T]
+        caps = devices[self.line_device_idx].nominal_capacity.squeeze()  # [L,]
+
+        util = la.abs(flows) / caps[:, None]  # [L,T]
+
+        # slice
+        if self.line_idx is not None:
+            util = util[self.line_idx, :]
+            base_u = self.base_line_util[self.line_idx, :]
+        else:
+            base_u = self.base_line_util
+
+        # reference = max(base_u, thr) if thr is set else base_u
+        if self.thr is None:
+            ref = base_u
+        else:
+            ref = np.maximum(base_u, float(self.thr))
+            if la == torch:
+                ref = torch.as_tensor(ref, dtype=util.dtype, device=util.device)
+
+        delta = util - ref
+
+        if la == torch:
+            penalty = torch.relu(delta)
+        else:
+            penalty = np.maximum(delta, 0.0)
+
+        return penalty.mean() if self.use_mean_over_time else penalty.sum()
+
+    @property
+    def is_convex(self):
+        return True
+
+    @property
+    def is_linear(self):
+        return False

@@ -6,7 +6,7 @@ import dataclasses
 class GradientDescent:
     """Parameters for gradient descent."""
 
-    step_size: float = 1e-1
+    step_size: float = 1e-2
     clip: float = 1e3
 
     def step(self, state: dict, grad: dict):

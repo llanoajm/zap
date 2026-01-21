@@ -10,6 +10,9 @@ from zap.planning.operation_objectives import (
     DispatchCostObjective,
     EmissionsObjective,
     MultiObjective,
+    LineOverloadObjective,
+    LineDeltaOverloadObjective,
+    LMPObjective,
 )
 
 from zap.planning.projection import SimplexBudgetProjection

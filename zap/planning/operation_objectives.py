@@ -147,11 +147,16 @@ class LMPObjective(AbstractOperationObjective):
     """Metric of dispatch LMPs."""
 
     def __init__(
-        self, net: PowerNetwork, devices: list[AbstractDevice], lmp_metric: str = "meanmax"
+        self,
+        net: PowerNetwork,
+        devices: list[AbstractDevice],
+        lmp_metric: str = "meanmax",
+        lmp_beta: float = 1.0,
     ):
         self.net = net
         self.devices = devices
         self.lmp_metric = lmp_metric
+        self.lmp_beta = lmp_beta
 
         if getattr(devices[0], "torched", False):
             self.torch_devices = devices
@@ -190,6 +195,60 @@ class LMPObjective(AbstractOperationObjective):
                 return lmps.max(dim=1).values.mean()
             else:
                 return np.mean(np.max(lmps, axis=1))
+        elif self.lmp_metric == "summax":
+            if la == torch:
+                return lmps.max(dim=1).values.sum()
+            else:
+                return np.sum(np.max(lmps, axis=1))
+        elif self.lmp_metric == "meantopk":
+            k = int(getattr(self, "topk", 5))
+            if la == torch:
+                return torch.topk(lmps, k, dim=1).values.mean()
+            else:
+                # sort along axis=1 and take last k
+                return np.sort(lmps, axis=1)[:, -k:].mean()
+        elif self.lmp_metric == "sumtopk":
+            k = int(getattr(self, "topk", 5))
+            if la == torch:
+                return torch.topk(lmps, k, dim=1).values.sum()
+            else:
+                return np.sort(lmps, axis=1)[:, -k:].sum()
+        elif self.lmp_metric == "meanpctl":
+            q = float(getattr(self, "pctl", 0.95))
+            if la == torch:
+                # torch.quantile exists in recent versions; fallback: topk approximation below if needed
+                return torch.quantile(lmps, q, dim=1).mean()
+            else:
+                return np.quantile(lmps, q, axis=1).mean()
+
+        elif self.lmp_metric == "sumpctl":
+            q = float(getattr(self, "pctl", 0.95))
+            if la == torch:
+                return torch.quantile(lmps, q, dim=1).sum()
+            else:
+                return np.quantile(lmps, q, axis=1).sum()
+
+        elif self.lmp_metric == "meansmoothmax":
+            alpha = float(getattr(self, "smooth_alpha", 20.0))
+            if la == torch:
+                sm = torch.logsumexp(alpha * lmps, dim=1) / alpha  # [N]
+                return self.lmp_beta * sm.mean()
+            else:
+                x = alpha * lmps
+                m = np.max(x, axis=1, keepdims=True)
+                sm = (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha  # [N]
+                return self.lmp_beta * sm.mean()
+
+        elif self.lmp_metric == "sumsmoothmax":
+            alpha = float(getattr(self, "smooth_alpha", 20.0))
+            if la == torch:
+                sm = torch.logsumexp(alpha * lmps, dim=1) / alpha
+                return self.lmp_beta * sm.sum()
+            else:
+                x = alpha * lmps
+                m = np.max(x, axis=1, keepdims=True)
+                sm = (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha
+                return self.lmp_beta * sm.sum()
 
     @property
     def is_convex(self):

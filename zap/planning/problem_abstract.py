@@ -152,7 +152,6 @@ class AbstractPlanningProblem:
                 checkpoint_func(state, history)
 
             # Project gradient onto simplex null space (preserves sum constraint)
-            # proj_grad = {k: grad[k] - self.la.mean(grad[k]) for k in grad}
             print(grad)
             proj_grad = {k: grad[k] - grad[k].mean() for k in grad}
             print(proj_grad)

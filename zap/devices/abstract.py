@@ -173,10 +173,11 @@ class AbstractDevice:
     def sample_time(self, time_periods, original_time_horizon):
         new_device = deepcopy(self)
         # Rescale capital costs by ratio of time horizons
+        # time_periods can be an integer (new horizon) or an array of indices (subsampling)
         if hasattr(new_device, "capital_cost"):
             if new_device.capital_cost is not None:
-                new_device.capital_cost /= original_time_horizon
-                new_device.capital_cost *= np.size(time_periods)
+                new_time_horizon = time_periods if np.isscalar(time_periods) else len(time_periods)
+                new_device.capital_cost *= new_time_horizon / original_time_horizon
 
         return new_device
 

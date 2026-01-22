@@ -1,10 +1,11 @@
-import math
-import torch
-import numpy as np
 import functools
+import math
 
-from zap.network import DispatchOutcome, PowerNetwork
+import numpy as np
+import torch
+
 from zap.devices.abstract import AbstractDevice
+from zap.network import DispatchOutcome, PowerNetwork
 
 
 class AbstractOperationObjective:

@@ -1,5 +1,6 @@
-import torch
 import dataclasses
+
+import torch
 
 
 @dataclasses.dataclass(kw_only=True)

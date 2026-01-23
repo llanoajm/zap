@@ -159,26 +159,27 @@ class AbstractPlanningProblem:
             # Gradient step and project
             # state = algorithm.step(state, proj_grad)
             state = algorithm.step(state, grad)
+            assert state is not None
             # print("after step:", 5 * softmax_np(state["theta"]))
-
             state = self.project(state)
+            assert state is not None
             # print("after proj:", state["dc_capacity"])
 
             if self.la == torch:
                 state = {k: v.detach().clone() for k, v in state.items()}
                 torch.cuda.empty_cache()
-
+            assert state is not None
             # Update batch and loss
             if batch_strategy == "sequential":
                 batch = get_next_batch(batch, batch_size, self.num_subproblems)
             else:  # fixed
                 batch = batch
-
+            assert state is not None
             print(batch) if verbosity >= 2 else None
 
             J, grad = self.forward_and_back(**state, batch=batch)
             # print("after fwd:", state["dc_capacity"])
-
+            assert state is not None
             # Record stuff
             history = self.update_history(
                 history, trackers, J, grad, state, last_state, wandb, log_wandb_every

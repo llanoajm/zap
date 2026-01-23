@@ -1,10 +1,10 @@
-import torch
-import numpy as np
-import cvxpy as cp
-import scipy.sparse as sp
-
-from typing import Optional
 from collections import namedtuple
+from typing import Optional
+
+import cvxpy as cp
+import numpy as np
+import scipy.sparse as sp
+import torch
 from numpy.typing import NDArray
 
 from zap.devices.abstract import AbstractDevice, make_dynamic

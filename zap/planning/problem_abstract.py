@@ -157,7 +157,8 @@ class AbstractPlanningProblem:
             print(proj_grad)
 
             # Gradient step and project
-            state = algorithm.step(state, proj_grad)
+            # state = algorithm.step(state, proj_grad)
+            state = algorithm.step(state, grad)
             # print("after step:", 5 * softmax_np(state["theta"]))
 
             state = self.project(state)
@@ -263,7 +264,7 @@ class AbstractPlanningProblem:
         proj = getattr(self, "extra_projections", {}).get(param)
         if proj is not None:
             state[param] = proj(state[param])
-            return state
+        return state
         # for param in state.keys():
         #     state[param] = self.la.clip(
         #         state[param], self.lower_bounds[param], self.upper_bounds[param]

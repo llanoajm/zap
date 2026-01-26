@@ -15,7 +15,7 @@ class SimplexBudgetProjection(Projection):
     def __call__(self, x):
         """
         Simplex projection algorithm from Duchi et al. (2008)
-        https://stanford.edu/~jduchi/projects/DuchiShSiCh08.pdf
+        https://ai.stanford.edu/~jduchi/projects/jd_ss_ys_l1.pdf
         """
         x = np.maximum(x, 0.0)
         s = x.sum()

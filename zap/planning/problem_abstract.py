@@ -8,6 +8,7 @@ import torch
 from zap.layer import DispatchLayer
 from zap.planning.investment_objectives import AbstractInvestmentObjective
 from zap.planning.operation_objectives import AbstractOperationObjective
+from zap.planning.projection import SimplexBudgetProjection, BoxBudgetProjection
 
 from .solvers import GradientDescent
 from .trackers import DEFAULT_TRACKERS, LOSS, TRACKER_MAPS
@@ -157,8 +158,12 @@ class AbstractPlanningProblem:
             print(proj_grad)
 
             # Gradient step and project
-            # state = algorithm.step(state, proj_grad)
-            state = algorithm.step(state, grad)
+            if any(
+                isinstance(proj, BoxBudgetProjection) for proj in self.extra_projections.values()
+            ):
+                state = algorithm.step(state, proj_grad)
+            else:
+                state = algorithm.step(state, grad)
             assert state is not None
             # print("after step:", 5 * softmax_np(state["theta"]))
             state = self.project(state)
@@ -257,20 +262,16 @@ class AbstractPlanningProblem:
         return history
 
     def project(self, state: dict):
-        for param in state.keys():
-            state[param] = self.la.clip(
-                state[param], self.lower_bounds[param], self.upper_bounds[param]
-            )
-        # Perform extra projections (like simplex budget projection)
-        proj = getattr(self, "extra_projections", {}).get(param)
-        if proj is not None:
-            state[param] = proj(state[param])
-        return state
         # for param in state.keys():
         #     state[param] = self.la.clip(
         #         state[param], self.lower_bounds[param], self.upper_bounds[param]
         #     )
-        # return state
+        # Perform extra projections (like simplex or box budget projection)
+        for param in state.keys():
+            proj = getattr(self, "extra_projections", {}).get(param)
+            if proj is not None:
+                state[param] = proj(state[param])
+        return state
 
     def get_state(self):
         return self.state

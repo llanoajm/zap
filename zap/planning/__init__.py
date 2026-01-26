@@ -15,5 +15,5 @@ from zap.planning.operation_objectives import (
     LMPObjective,
 )
 
-from zap.planning.projection import SimplexBudgetProjection
+from zap.planning.projection import SimplexBudgetProjection, BoxBudgetProjection
 from zap.planning.benders import BendersSolver

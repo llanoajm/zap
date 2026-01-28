@@ -260,307 +260,6 @@ class LMPObjective(AbstractOperationObjective):
         return False
 
 
-class LineOverloadObjective(AbstractOperationObjective):
-    """
-    Penalize transmission line utilization above a threshold.
-
-    Uses the AC line flows from y.power[line_device_idx][1] with shape [L,T],
-    and nominal capacities from devices[line_device_idx].nominal_capacity.
-
-    Objective (default):
-        sum_{l in line_idx} sum_t relu(util[l,t] - thr)
-
-    Notes:
-    - differentiable when la=torch (uses torch.abs, torch.relu)
-    - works with numpy too
-    """
-
-    def __init__(
-        self,
-        devices: list[AbstractDevice],
-        line_device_idx: int = 3,  # your ACLine device index in y.power/devices
-        line_idx: np.ndarray | list[int] | None = None,
-        thr: float = 0.90,
-        use_mean_over_time: bool = False,  # if True: mean over time instead of sum over time
-    ):
-        self.devices = devices
-        self.line_device_idx = line_device_idx
-        self.line_idx = None if line_idx is None else np.asarray(line_idx, dtype=int)
-        self.thr = float(thr)
-        self.use_mean_over_time = bool(use_mean_over_time)
-
-        # torchify if needed (same pattern as your other objectives)
-        if getattr(devices[0], "torched", False):
-            self.torch_devices = devices
-            self.torched = True
-        else:
-            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
-            self.torched = False
-
-    def forward(self, y: DispatchOutcome, parameters=None, la=None):
-        if la is None:
-            la = torch if self.torched else np
-
-        devices = self.torch_devices if la == torch else self.devices
-
-        # line flows: you said y.power[3][1] is [L,T]
-        flows = y.power[self.line_device_idx][1]
-        caps = devices[self.line_device_idx].nominal_capacity.squeeze()  # [L,]
-        eps = 1e-6
-        if la == torch:
-            caps = torch.clamp(caps, min=eps)
-        else:
-            caps = np.maximum(caps, eps)
-
-        # utilization
-        util = la.abs(flows) / caps[:, None]
-
-        # optional subset of lines
-        if self.line_idx is not None:
-            util = util[self.line_idx, :]
-
-        # overload above threshold
-        overload = util - self.thr
-        if la == torch:
-            overload = torch.relu(overload)
-        else:
-            overload = np.maximum(overload, 0.0)
-
-        # aggregate
-        if self.use_mean_over_time:
-            return overload.mean()
-        else:
-            return overload.sum()
-
-    @property
-    def is_convex(self):
-        # abs is convex; relu is convex; sum preserves convexity
-        return True
-
-    @property
-    def is_linear(self):
-        return False
-
-
-class LineDeltaOverloadObjective(AbstractOperationObjective):
-    """
-    Penalize INCREASE in line utilization relative to a fixed base utilization profile.
-
-    J = sum_{l in line_idx} sum_t relu( util_plan[l,t] - max(util_base[l,t], thr) )
-
-    - If thr=None: compares purely vs base util (relu(util_plan - util_base))
-    - If thr is set (e.g. 0.90): only cares once base is below thr; uses max(base, thr)
-    """
-
-    def __init__(
-        self,
-        devices: list[AbstractDevice],
-        base_line_util,  # [L,T] numpy array (precomputed)
-        line_device_idx: int = 3,
-        line_idx=None,  # list/array of line indices (or None for all)
-        thr: float | None = 0.90,
-        use_mean_over_time: bool = False,
-    ):
-        self.devices = devices
-        self.base_line_util = np.asarray(base_line_util)
-        self.line_device_idx = line_device_idx
-        self.line_idx = None if line_idx is None else np.asarray(line_idx, dtype=int)
-        self.thr = thr
-        self.use_mean_over_time = bool(use_mean_over_time)
-
-        if getattr(devices[0], "torched", False):
-            self.torch_devices = devices
-            self.torched = True
-        else:
-            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
-            self.torched = False
-
-    def forward(self, y: DispatchOutcome, parameters=None, la=None):
-        if la is None:
-            la = torch if self.torched else np
-
-        devices = self.torch_devices if la == torch else self.devices
-
-        flows = y.power[self.line_device_idx][1]  # [L,T]
-        caps = devices[self.line_device_idx].nominal_capacity.squeeze()  # [L,]
-        eps = 1e-6
-        if la == torch:
-            caps = torch.clamp(caps, min=eps)
-        else:
-            caps = np.maximum(caps, eps)
-
-        util = la.abs(flows) / caps[:, None]  # [L,T]
-
-        # slice
-        if self.line_idx is not None:
-            util = util[self.line_idx, :]
-            base_u = self.base_line_util[self.line_idx, :]
-        else:
-            base_u = self.base_line_util
-
-        # reference = max(base_u, thr) if thr is set else base_u
-        if self.thr is None:
-            ref = base_u
-        else:
-            ref = np.maximum(base_u, float(self.thr))
-            if la == torch:
-                ref = torch.as_tensor(ref, dtype=util.dtype, device=util.device)
-
-        delta = util - ref
-
-        if la == torch:
-            penalty = torch.relu(delta)
-        else:
-            penalty = np.maximum(delta, 0.0)
-
-        return penalty.mean() if self.use_mean_over_time else penalty.sum()
-
-    @property
-    def is_convex(self):
-        return True
-
-    @property
-    def is_linear(self):
-        return False
-
-
-class SCOPFDispatchCostObjective(AbstractOperationObjective):
-    """
-    Security-Constrained OPF dispatch cost objective.
-
-    Computes average dispatch cost across base case + all contingency scenarios.
-    For contingency-aware devices (3D tensors), computes cost for each scenario
-    and aggregates. For non-contingency devices (2D tensors), uses standard cost.
-
-    Args:
-        net: PowerNetwork instance
-        devices: List of devices (torchified or not)
-        contingency_device_idx: Index of ACLine device with contingencies (typically 3)
-        aggregation: How to aggregate across scenarios ('mean', 'sum', 'weighted')
-        scenario_weights: Optional weights for each scenario [base, c1, c2, ...].
-                         If None, uses equal weights. Shape: (num_contingencies+1,)
-    """
-
-    def __init__(
-        self,
-        net: PowerNetwork,
-        devices: list[AbstractDevice],
-        contingency_device_idx: int = 3,
-        aggregation: str = "mean",
-        scenario_weights=None,
-        cvar_alpha: float = 0.95,
-        topk: int | None = None,
-    ):
-        self.net = net
-        self.devices = devices
-        self.contingency_device_idx = contingency_device_idx
-        self.aggregation = aggregation
-        self.scenario_weights = scenario_weights
-        self.cvar_alpha = float(cvar_alpha)
-        self.topk = topk
-
-        if getattr(devices[0], "torched", False):
-            self.torch_devices = devices
-            self.torched = True
-        else:
-            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
-            self.torched = False
-
-    def forward(self, y: DispatchOutcome, parameters=None, la=None):
-        if la is None:
-            la = torch if self.torched else np
-
-        devices = self.torch_devices if la == torch else self.devices
-
-        # Detect if we have contingency outputs
-        contingency_power = y.power[self.contingency_device_idx]
-        if contingency_power[0].ndim == 3:
-            num_contingencies = contingency_power[0].shape[2] - 1  # Exclude base case
-
-            # Compute cost for each scenario
-            scenario_costs = []
-            for scenario_idx in range(num_contingencies + 1):
-                # Extract scenario-specific power/angle for contingency device
-                scenario_power = [y.power[i] for i in range(len(devices))]
-                scenario_angle = [y.angle[i] for i in range(len(devices))] if y.angle else None
-                scenario_local = [y.local_variables[i] for i in range(len(devices))]
-
-                # Slice contingency device to this scenario
-                scenario_power[self.contingency_device_idx] = [
-                    p[:, :, scenario_idx] for p in contingency_power
-                ]
-                if scenario_angle is not None and y.angle[self.contingency_device_idx] is not None:
-                    scenario_angle[self.contingency_device_idx] = [
-                        v[:, :, scenario_idx] for v in y.angle[self.contingency_device_idx]
-                    ]
-
-                # Compute cost for this scenario using network's operation_cost
-                cost_i = self.net.operation_cost(
-                    devices,
-                    scenario_power,
-                    scenario_angle,
-                    scenario_local,
-                    parameters=parameters,
-                    la=la,
-                )
-                scenario_costs.append(cost_i)
-
-            # Aggregate across scenarios
-            if la == torch:
-                costs_tensor = torch.stack(scenario_costs)
-            else:
-                costs_tensor = np.array(scenario_costs)
-
-            if self.scenario_weights is not None:
-                if la == torch:
-                    weights = torch.as_tensor(
-                        self.scenario_weights,
-                        dtype=costs_tensor.dtype,
-                        device=costs_tensor.device,
-                    )
-                    return (costs_tensor * weights).sum()
-                else:
-                    weights = np.asarray(self.scenario_weights)
-                    return np.sum(costs_tensor * weights)
-            elif self.aggregation == "mean":
-                return costs_tensor.mean() if la == torch else np.mean(costs_tensor)
-            elif self.aggregation == "sum":
-                return costs_tensor.sum() if la == torch else np.sum(costs_tensor)
-            elif self.aggregation == "max":
-                return costs_tensor.max() if la == torch else np.max(costs_tensor)
-            elif self.aggregation in ("cvar", "meantopk"):
-                n = int(costs_tensor.numel() if la == torch else costs_tensor.size)
-                if n <= 0:
-                    return costs_tensor.sum() * 0.0
-
-                if self.aggregation == "meantopk":
-                    k = int(self.topk or 1)
-                else:
-                    alpha = float(self.cvar_alpha)
-                    k = int(math.ceil((1.0 - alpha) * n))
-                k = max(1, min(k, n))
-
-                if la == torch:
-                    return torch.topk(costs_tensor, k=k, largest=True).values.mean()
-                else:
-                    return np.mean(np.sort(costs_tensor)[-k:])
-            else:
-                raise ValueError(f"Unknown aggregation: {self.aggregation}")
-        else:
-            # No contingencies - use standard computation
-            return self.net.operation_cost(
-                devices, y.power, y.angle, y.local_variables, parameters=parameters, la=la
-            )
-
-    @property
-    def is_convex(self):
-        return True
-
-    @property
-    def is_linear(self):
-        return False
-
-
 class SCOPFLMPObjective(AbstractOperationObjective):
     """
     Security-Constrained OPF LMP objective.
@@ -581,7 +280,7 @@ class SCOPFLMPObjective(AbstractOperationObjective):
         self,
         net: PowerNetwork,
         devices: list[AbstractDevice],
-        lmp_metric: str = "meanmax",
+        lmp_metric: str = "sumsmoothmax",
         lmp_beta: float = 1.0,
         aggregation: str = "mean",
         node_idx: np.ndarray | list[int] | None = None,
@@ -656,7 +355,16 @@ class SCOPFLMPObjective(AbstractOperationObjective):
                 m = np.max(x, axis=1, keepdims=True)
                 sm = (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha
                 return self.lmp_beta * sm.mean()
-            raise ValueError(f"Unsupported LMP metric: {self.lmp_metric}")
+            if self.lmp_metric == "sumsmoothmax":
+                alpha = float(getattr(self, "smooth_alpha", 20.0))
+                if la == torch:
+                    sm = torch.logsumexp(alpha * lmp_2d, dim=1) / alpha
+                    return self.lmp_beta * sm.sum()
+                else:
+                    x = alpha * lmp_2d
+                    m = np.max(x, axis=1, keepdims=True)
+                    sm = (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha
+                    return self.lmp_beta * sm.sum()
 
         if lmps.ndim == 2:
             return metric(lmps)
@@ -688,297 +396,142 @@ class SCOPFLMPObjective(AbstractOperationObjective):
         return False
 
 
-class DCTailPriceObjective(AbstractOperationObjective):
-    """
-    Penalize high LMPs *at the DC terminals* using a tail metric over time.
+# class DCTailPriceObjective(AbstractOperationObjective):
+#     """
+#     Penalize high LMPs *at the DC terminals* using a tail metric over time.
 
-    This makes "spreading" arise naturally (no caps) by making concentrated
-    capacity at a high-tail-price location expensive.
+#     This makes "spreading" arise naturally (no caps) by making concentrated
+#     capacity at a high-tail-price location expensive.
 
-    If weight_by_capacity:
-        sum_i dc_cap[i] * tail_t(price[terminal_i, :])
-    Else:
-        sum_i tail_t(price[terminal_i, :])
+#     If weight_by_capacity:
+#         sum_i dc_cap[i] * tail_t(price[terminal_i, :])
+#     Else:
+#         sum_i tail_t(price[terminal_i, :])
 
-    tail_t is controlled by lmp_metric (e.g. 'cvar', 'meantopk', 'meansmoothmax', 'meanmax').
-    """
+#     tail_t is controlled by lmp_metric (e.g. 'cvar', 'meantopk', 'meansmoothmax', 'meanmax').
+#     """
 
-    def __init__(
-        self,
-        devices: list[AbstractDevice],
-        dc_device_idx: int,
-        lmp_metric: str = "cvar",
-        weight_by_capacity: bool = True,
-        aggregation_across_dcs: str = "sum",  # 'sum' | 'max' | 'mean'
-        cvar_alpha: float = 0.95,
-        topk: int = 5,
-        smooth_alpha: float = 20.0,
-    ):
-        self.devices = devices
-        self.dc_device_idx = int(dc_device_idx)
-        self.lmp_metric = lmp_metric
-        self.weight_by_capacity = bool(weight_by_capacity)
-        self.aggregation_across_dcs = aggregation_across_dcs
-        self.cvar_alpha = float(cvar_alpha)
-        self.topk = int(topk)
-        self.smooth_alpha = float(smooth_alpha)
+#     def __init__(
+#         self,
+#         devices: list[AbstractDevice],
+#         dc_device_idx: int,
+#         lmp_metric: str = "cvar",
+#         weight_by_capacity: bool = True,
+#         aggregation_across_dcs: str = "sum",  # 'sum' | 'max' | 'mean'
+#         cvar_alpha: float = 0.95,
+#         topk: int = 5,
+#         smooth_alpha: float = 20.0,
+#     ):
+#         self.devices = devices
+#         self.dc_device_idx = int(dc_device_idx)
+#         self.lmp_metric = lmp_metric
+#         self.weight_by_capacity = bool(weight_by_capacity)
+#         self.aggregation_across_dcs = aggregation_across_dcs
+#         self.cvar_alpha = float(cvar_alpha)
+#         self.topk = int(topk)
+#         self.smooth_alpha = float(smooth_alpha)
 
-        if getattr(devices[0], "torched", False):
-            self.torch_devices = devices
-            self.torched = True
-        else:
-            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
-            self.torched = False
+#         if getattr(devices[0], "torched", False):
+#             self.torch_devices = devices
+#             self.torched = True
+#         else:
+#             self.torch_devices = [d.torchify(machine="cpu") for d in devices]
+#             self.torched = False
 
-    def forward(self, y: DispatchOutcome, parameters=None, la=None):
-        if la is None:
-            la = torch if self.torched else np
+#     def forward(self, y: DispatchOutcome, parameters=None, la=None):
+#         if la is None:
+#             la = torch if self.torched else np
 
-        devices = self.torch_devices if la == torch else self.devices
-        lmps = y.prices
+#         devices = self.torch_devices if la == torch else self.devices
+#         lmps = y.prices
 
-        dc_dev = devices[self.dc_device_idx]
-        terminals = dc_dev.terminals
-        if la == torch:
-            if not torch.is_tensor(terminals):
-                terminals = torch.as_tensor(terminals, device=lmps.device)
-            else:
-                terminals = terminals.to(device=lmps.device)
-        else:
-            terminals = np.asarray(terminals, dtype=int)
+#         dc_dev = devices[self.dc_device_idx]
+#         terminals = dc_dev.terminals
+#         if la == torch:
+#             if not torch.is_tensor(terminals):
+#                 terminals = torch.as_tensor(terminals, device=lmps.device)
+#             else:
+#                 terminals = terminals.to(device=lmps.device)
+#         else:
+#             terminals = np.asarray(terminals, dtype=int)
 
-        def tail_over_time(pr_2d):
-            # pr_2d: (n_dc, T)
-            if self.lmp_metric == "meanmax":
-                if la == torch:
-                    return pr_2d.max(dim=1).values
-                return np.max(pr_2d, axis=1)
+#         def tail_over_time(pr_2d):
+#             # pr_2d: (n_dc, T)
+#             if self.lmp_metric == "meanmax":
+#                 if la == torch:
+#                     return pr_2d.max(dim=1).values
+#                 return np.max(pr_2d, axis=1)
 
-            if self.lmp_metric == "meantopk":
-                k = max(1, int(self.topk))
-                if la == torch:
-                    return torch.topk(pr_2d, k, dim=1).values.mean(dim=1)
-                return np.sort(pr_2d, axis=1)[:, -k:].mean(axis=1)
+#             if self.lmp_metric == "meantopk":
+#                 k = max(1, int(self.topk))
+#                 if la == torch:
+#                     return torch.topk(pr_2d, k, dim=1).values.mean(dim=1)
+#                 return np.sort(pr_2d, axis=1)[:, -k:].mean(axis=1)
 
-            if self.lmp_metric == "cvar":
-                alpha = float(self.cvar_alpha)
-                if la == torch:
-                    sorted_x, _ = torch.sort(pr_2d, dim=1)  # ascending
-                    T = sorted_x.shape[1]
-                    k0 = int(math.floor(alpha * T))
-                    k0 = min(max(k0, 0), T - 1)
-                    return sorted_x[:, k0:].mean(dim=1)
-                sorted_x = np.sort(pr_2d, axis=1)
-                T = sorted_x.shape[1]
-                k0 = int(math.floor(alpha * T))
-                k0 = min(max(k0, 0), T - 1)
-                return sorted_x[:, k0:].mean(axis=1)
+#             if self.lmp_metric == "cvar":
+#                 alpha = float(self.cvar_alpha)
+#                 if la == torch:
+#                     sorted_x, _ = torch.sort(pr_2d, dim=1)  # ascending
+#                     T = sorted_x.shape[1]
+#                     k0 = int(math.floor(alpha * T))
+#                     k0 = min(max(k0, 0), T - 1)
+#                     return sorted_x[:, k0:].mean(dim=1)
+#                 sorted_x = np.sort(pr_2d, axis=1)
+#                 T = sorted_x.shape[1]
+#                 k0 = int(math.floor(alpha * T))
+#                 k0 = min(max(k0, 0), T - 1)
+#                 return sorted_x[:, k0:].mean(axis=1)
 
-            if self.lmp_metric == "meansmoothmax":
-                alpha = float(self.smooth_alpha)
-                if la == torch:
-                    return torch.logsumexp(alpha * pr_2d, dim=1) / alpha
-                x = alpha * pr_2d
-                m = np.max(x, axis=1, keepdims=True)
-                return (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha
+#             if self.lmp_metric == "meansmoothmax":
+#                 alpha = float(self.smooth_alpha)
+#                 if la == torch:
+#                     return torch.logsumexp(alpha * pr_2d, dim=1) / alpha
+#                 x = alpha * pr_2d
+#                 m = np.max(x, axis=1, keepdims=True)
+#                 return (np.log(np.sum(np.exp(x - m), axis=1)) + m.squeeze(1)) / alpha
 
-            raise ValueError(f"Unsupported lmp_metric for DCTailPriceObjective: {self.lmp_metric}")
+#             raise ValueError(f"Unsupported lmp_metric for DCTailPriceObjective: {self.lmp_metric}")
 
-        def combine(dc_tail):
-            if self.aggregation_across_dcs == "sum":
-                return dc_tail.sum() if la == torch else np.sum(dc_tail)
-            if self.aggregation_across_dcs == "mean":
-                return dc_tail.mean() if la == torch else np.mean(dc_tail)
-            if self.aggregation_across_dcs == "max":
-                return dc_tail.max() if la == torch else np.max(dc_tail)
-            raise ValueError(f"Unknown aggregation_across_dcs: {self.aggregation_across_dcs}")
+#         def combine(dc_tail):
+#             if self.aggregation_across_dcs == "sum":
+#                 return dc_tail.sum() if la == torch else np.sum(dc_tail)
+#             if self.aggregation_across_dcs == "mean":
+#                 return dc_tail.mean() if la == torch else np.mean(dc_tail)
+#             if self.aggregation_across_dcs == "max":
+#                 return dc_tail.max() if la == torch else np.max(dc_tail)
+#             raise ValueError(f"Unknown aggregation_across_dcs: {self.aggregation_across_dcs}")
 
-        if lmps.ndim == 2:
-            pr = lmps.index_select(0, terminals) if la == torch else lmps[terminals, :]
-            dc_tail = tail_over_time(pr)
-        elif lmps.ndim == 3:
-            num_scenarios = lmps.shape[2]
-            per_s = []
-            for s in range(num_scenarios):
-                pr_s = lmps[:, :, s]
-                pr_s = pr_s.index_select(0, terminals) if la == torch else pr_s[terminals, :]
-                per_s.append(tail_over_time(pr_s))
-            if la == torch:
-                dc_tail = torch.stack(per_s, dim=0).mean(dim=0)
-            else:
-                dc_tail = np.mean(np.stack(per_s, axis=0), axis=0)
-        else:
-            raise ValueError(f"Unexpected prices shape: {lmps.shape}")
+#         if lmps.ndim == 2:
+#             pr = lmps.index_select(0, terminals) if la == torch else lmps[terminals, :]
+#             dc_tail = tail_over_time(pr)
+#         elif lmps.ndim == 3:
+#             num_scenarios = lmps.shape[2]
+#             per_s = []
+#             for s in range(num_scenarios):
+#                 pr_s = lmps[:, :, s]
+#                 pr_s = pr_s.index_select(0, terminals) if la == torch else pr_s[terminals, :]
+#                 per_s.append(tail_over_time(pr_s))
+#             if la == torch:
+#                 dc_tail = torch.stack(per_s, dim=0).mean(dim=0)
+#             else:
+#                 dc_tail = np.mean(np.stack(per_s, axis=0), axis=0)
+#         else:
+#             raise ValueError(f"Unexpected prices shape: {lmps.shape}")
 
-        if self.weight_by_capacity:
-            dc_cap = None
-            if parameters is not None:
-                dc_cap = parameters[self.dc_device_idx].get("nominal_capacity", None)
-            if dc_cap is None:
-                dc_cap = getattr(dc_dev, "nominal_capacity", None)
+#         if self.weight_by_capacity:
+#             dc_cap = None
+#             if parameters is not None:
+#                 dc_cap = parameters[self.dc_device_idx].get("nominal_capacity", None)
+#             if dc_cap is None:
+#                 dc_cap = getattr(dc_dev, "nominal_capacity", None)
 
-            if la == torch:
-                if not torch.is_tensor(dc_cap):
-                    dc_cap = torch.as_tensor(dc_cap, device=dc_tail.device, dtype=dc_tail.dtype)
-                dc_cap = dc_cap.reshape(-1)
-            else:
-                dc_cap = np.asarray(dc_cap).reshape(-1)
+#             if la == torch:
+#                 if not torch.is_tensor(dc_cap):
+#                     dc_cap = torch.as_tensor(dc_cap, device=dc_tail.device, dtype=dc_tail.dtype)
+#                 dc_cap = dc_cap.reshape(-1)
+#             else:
+#                 dc_cap = np.asarray(dc_cap).reshape(-1)
 
-            return combine(dc_cap * dc_tail)
+#             return combine(dc_cap * dc_tail)
 
-        return combine(dc_tail)
-
-
-class SCOPFLineOverloadObjective(AbstractOperationObjective):
-    """
-    Security-Constrained OPF line overload penalty objective.
-
-    Penalize transmission line overloads across all contingency scenarios.
-    For each scenario (base + contingencies), computes line utilization and
-    penalizes flows above threshold. Aggregates across scenarios.
-
-    Args:
-        devices: List of devices
-        line_device_idx: Index of ACLine device (typically 3)
-        line_idx: Optional subset of lines to monitor
-        thr: Utilization threshold (0.0 to 1.0)
-        use_mean_over_time: If True, average over time instead of sum
-        aggregation: How to aggregate across scenarios ('mean', 'max', 'sum')
-        scenario_weights: Optional weights for scenarios
-    """
-
-    def __init__(
-        self,
-        devices: list[AbstractDevice],
-        line_device_idx: int = 3,
-        line_idx=None,
-        thr: float = 0.90,
-        use_mean_over_time: bool = False,
-        aggregation: str = "mean",
-        scenario_weights=None,
-        cvar_alpha: float = 0.95,
-        topk: int | None = None,
-    ):
-        self.devices = devices
-        self.line_device_idx = line_device_idx
-        self.line_idx = None if line_idx is None else np.asarray(line_idx, dtype=int)
-        self.thr = float(thr)
-        self.use_mean_over_time = bool(use_mean_over_time)
-        self.aggregation = aggregation
-        self.scenario_weights = scenario_weights
-        self.cvar_alpha = float(cvar_alpha)
-        self.topk = topk
-
-        if getattr(devices[0], "torched", False):
-            self.torch_devices = devices
-            self.torched = True
-        else:
-            self.torch_devices = [d.torchify(machine="cpu") for d in devices]
-            self.torched = False
-
-    def forward(self, y: DispatchOutcome, parameters=None, la=None):
-        if la is None:
-            la = torch if self.torched else np
-
-        devices = self.torch_devices if la == torch else self.devices
-
-        # Get line flows and capacity
-        flows = y.power[self.line_device_idx][1]  # Forward flow
-        caps = devices[self.line_device_idx].nominal_capacity.squeeze()
-        eps = 1e-6
-        if la == torch:
-            caps = torch.clamp(caps, min=eps)
-        else:
-            caps = np.maximum(caps, eps)
-
-        # Check dimensionality
-        line_idx = self.line_idx
-        if line_idx is not None and la == torch:
-            line_idx = torch.as_tensor(line_idx, device=flows.device)
-
-        if flows.ndim == 3:
-            # Shape: (L, T, num_contingencies+1)
-            num_scenarios = flows.shape[2]
-
-            scenario_penalties = []
-            for scenario_idx in range(num_scenarios):
-                # Extract flows for this scenario
-                flows_s = flows[:, :, scenario_idx]  # (L, T)
-
-                # Compute utilization
-                util = la.abs(flows_s) / caps[:, None]
-
-                # Optional subset
-                if line_idx is not None:
-                    util = util[line_idx, :]
-
-                # Compute overload penalty
-                overload = util - self.thr
-                if la == torch:
-                    overload = torch.relu(overload)
-                else:
-                    overload = np.maximum(overload, 0.0)
-
-                # Aggregate over time
-                penalty_s = overload.mean() if self.use_mean_over_time else overload.sum()
-                scenario_penalties.append(penalty_s)
-
-            # Aggregate across scenarios
-            if la == torch:
-                penalties_tensor = torch.stack(scenario_penalties)
-            else:
-                penalties_tensor = np.array(scenario_penalties)
-
-            if self.scenario_weights is not None:
-                if la == torch:
-                    weights = torch.as_tensor(
-                        self.scenario_weights,
-                        dtype=penalties_tensor.dtype,
-                        device=penalties_tensor.device,
-                    )
-                    return (penalties_tensor * weights).sum()
-                weights = np.asarray(self.scenario_weights)
-                return np.sum(penalties_tensor * weights)
-            elif self.aggregation == "mean":
-                return penalties_tensor.mean()
-            elif self.aggregation == "max":
-                return penalties_tensor.max() if la == torch else np.max(penalties_tensor)
-            elif self.aggregation == "sum":
-                return penalties_tensor.sum() if la == torch else np.sum(penalties_tensor)
-            elif self.aggregation in ("cvar", "meantopk"):
-                n = int(penalties_tensor.numel() if la == torch else penalties_tensor.size)
-                if n <= 0:
-                    return penalties_tensor.sum() * 0.0
-
-                if self.aggregation == "meantopk":
-                    k = int(self.topk or 1)
-                else:
-                    alpha = float(self.cvar_alpha)
-                    k = int(math.ceil((1.0 - alpha) * n))
-                k = max(1, min(k, n))
-
-                if la == torch:
-                    return torch.topk(penalties_tensor, k=k, largest=True).values.mean()
-                else:
-                    return np.mean(np.sort(penalties_tensor)[-k:])
-            else:
-                raise ValueError(f"Unknown aggregation: {self.aggregation}")
-        else:
-            # 2D case - no contingencies
-            util = la.abs(flows) / caps[:, None]
-            if line_idx is not None:
-                util = util[line_idx, :]
-            overload = util - self.thr
-            if la == torch:
-                overload = torch.relu(overload)
-            else:
-                overload = np.maximum(overload, 0.0)
-            return overload.mean() if self.use_mean_over_time else overload.sum()
-
-    @property
-    def is_convex(self):
-        return True
-
-    @property
-    def is_linear(self):
-        return False
+#         return combine(dc_tail)

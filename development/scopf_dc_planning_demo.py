@@ -22,6 +22,9 @@ def _():
     from zap.admm import ADMMLayer, ADMMSolver
     from zap.devices import ACLine, DataCenterLoad
     from zap.importers.pypsa import load_pypsa_network, parse_buses
+    from zap.planning.operation_objectives import SCOPFLMPObjective
+    import scipy.sparse as sp
+
 
     sns.set_theme()
     return (
@@ -29,6 +32,7 @@ def _():
         ADMMLayer,
         ADMMSolver,
         DataCenterLoad,
+        SCOPFLMPObjective,
         cp,
         deepcopy,
         gpd,
@@ -41,6 +45,7 @@ def _():
         plt,
         pypsa,
         sns,
+        sp,
         torch,
         zap,
     )
@@ -100,6 +105,26 @@ def _(mo):
 
 
 @app.cell
+def _(os, pypsa):
+    HOME_PATH = os.environ.get("HOME")
+    WORKLOAD_PROFILE_PATH = '/Users/akshaysreekumar/Documents/Stanford/S3L/zap/development/load_profiles/example_inference_azure_conv.csv'
+    PYPSA_NETW0RK_PATH = (
+        HOME_PATH + "/zap_data/pypsa-networks/western_small/network_2023.nc"
+    )
+    pn = pypsa.Network(PYPSA_NETW0RK_PATH)
+    snapshots = pn.generators_t.p_max_pu.index
+    snapshot_data = snapshots[5616:5640]  # 8/23/21 # hourly
+    return (
+        HOME_PATH,
+        PYPSA_NETW0RK_PATH,
+        WORKLOAD_PROFILE_PATH,
+        pn,
+        snapshot_data,
+        snapshots,
+    )
+
+
+@app.cell
 def upsample_zap_devices():
     def upsample_zap_devices(devices, factor=4, original_timesteps=24):
         """Upsample time-varying device attributes by repeating each timestep."""
@@ -110,83 +135,6 @@ def upsample_zap_devices():
             )
         return upsampled_devices
     return (upsample_zap_devices,)
-
-
-@app.cell
-def _(INVESTMENT_NODE_CANDS, gpd, np, os, parse_buses, pd, pypsa):
-    HOME_PATH = os.environ.get("HOME")
-    PYPSA_NETWORK_PATH = HOME_PATH + "/zap_data/pypsa-networks/western_small/network_2023.nc"
-    pn = pypsa.Network(PYPSA_NETWORK_PATH)
-    snapshots = pn.generators_t.p_max_pu.index
-
-    # Use 24 hours from peak hybrid day (load + renewables)
-    snapshot_data = snapshots[5448:5472]  # 8/16/21
-
-    buses, buses_to_index = parse_buses(pn)
-    index_to_bus = {idx: name for name, idx in buses_to_index.items()}
-    pypsa_bus_names = [index_to_bus[i] for i in INVESTMENT_NODE_CANDS]
-
-    b = pn.buses.copy()
-    gdf = gpd.GeoDataFrame(b, geometry=gpd.points_from_xy(b["x"], b["y"]), crs="EPSG:4326")
-    county_url = "https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip"
-    counties = gpd.read_file(county_url)[
-        ["STATEFP", "COUNTYFP", "GEOID", "NAME", "STATE_NAME", "geometry"]
-    ]
-
-    j = gpd.sjoin(gdf, counties.to_crs("EPSG:4326"), how="left", predicate="within")
-
-    pn.buses["county_fips"] = j["GEOID"]
-    pn.buses["county_name"] = j["NAME"]
-    pn.buses["state_fips"] = j["STATEFP"]
-    pn.buses["state_name"] = j["STATE_NAME"]
-
-    selected_node_fips = pn.buses.loc[pypsa_bus_names, "county_fips"]
-    county_land_lut_df = pd.read_csv(HOME_PATH + "/zap/development/county_land_lut.csv")
-
-    sel = selected_node_fips.rename("county_fips").to_frame()
-    bus_to_terminal = {bus: term for term, bus in index_to_bus.items()}
-    sel["terminal"] = sel.index.map(bus_to_terminal)
-    sel["county_fips"] = sel["county_fips"].astype(str).str.zfill(5)
-    county_land_lut_df["county_fips"] = county_land_lut_df["county_fips"].astype(str).str.zfill(5)
-
-    sel = sel.merge(
-        county_land_lut_df,
-        left_on="county_fips",
-        right_on="county_fips",
-        how="left",
-    )
-
-    terminal_cost = (
-        sel.groupby("terminal")["land_usd2017_per_acre"].first().sort_index()
-    )
-    CAPITAL_COSTS = np.array(sel.land_usd2017_per_acre)
-
-    WORKLOAD_PROFILE_PATH = (
-        HOME_PATH + "/zap/development/load_profiles/example_inference_azure_conv.csv"
-    )
-    return (
-        CAPITAL_COSTS,
-        HOME_PATH,
-        PYPSA_NETWORK_PATH,
-        WORKLOAD_PROFILE_PATH,
-        b,
-        bus_to_terminal,
-        buses,
-        buses_to_index,
-        counties,
-        county_land_lut_df,
-        county_url,
-        gdf,
-        index_to_bus,
-        j,
-        pn,
-        pypsa_bus_names,
-        sel,
-        selected_node_fips,
-        snapshot_data,
-        snapshots,
-        terminal_cost,
-    )
 
 
 @app.cell
@@ -203,6 +151,75 @@ def _(
     )
     pypsa_devices = upsample_zap_devices(pypsa_devices, factor=UPSAMPLE_FACTOR, original_timesteps=24)
     return pypsa_devices, pypsa_net
+
+
+@app.cell
+def _(INVESTMENT_NODE_CANDS, gpd, parse_buses, pd, pn):
+    buses, buses_to_index = parse_buses(pn) # buses_to_index is dict of "pyspa_bus_name": "zap_terminal"
+    index_to_bus = {idx: name for name, idx in buses_to_index.items()}
+    pypsa_bus_names = [index_to_bus[i] for i in INVESTMENT_NODE_CANDS]
+
+    b = pn.buses.copy()
+    gdf = gpd.GeoDataFrame(
+        b, geometry=gpd.points_from_xy(b["x"], b["y"]), crs="EPSG:4326"
+    )
+
+    county_url = "https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip"
+    counties = gpd.read_file(county_url)[["STATEFP","COUNTYFP","GEOID","NAME","STATE_NAME","geometry"]]
+
+    j = gpd.sjoin(gdf, counties.to_crs("EPSG:4326"), how="left", predicate="within")
+
+    pn.buses["county_fips"] = j["GEOID"]  # 5-digit FIPS
+    pn.buses["county_name"] = j["NAME"]
+    pn.buses["state_fips"]  = j["STATEFP"]
+    pn.buses["state_name"]  = j["STATE_NAME"]
+
+    selected_node_fips = pn.buses.loc[pypsa_bus_names, "county_fips"]
+    county_land_lut_df = pd.read_csv("development/county_land_lut.csv")
+    return (
+        b,
+        buses,
+        buses_to_index,
+        counties,
+        county_land_lut_df,
+        county_url,
+        gdf,
+        index_to_bus,
+        j,
+        pypsa_bus_names,
+        selected_node_fips,
+    )
+
+
+@app.cell
+def _(county_land_lut_df, index_to_bus, selected_node_fips):
+    sel = selected_node_fips.rename("county_fips").to_frame()
+    bus_to_terminal = {bus: term for term, bus in index_to_bus.items()}
+    sel["terminal"] = sel.index.map(bus_to_terminal)
+    sel["county_fips"] = sel["county_fips"].astype(str).str.zfill(5)
+    county_land_lut_df["county_fips"] = county_land_lut_df["county_fips"].astype(str).str.zfill(5)
+
+    sel = sel.merge(
+        county_land_lut_df,
+        left_on="county_fips",
+        right_on="county_fips",
+        how="left",
+    )
+
+    terminal_cost = (
+        sel.groupby("terminal")["land_usd2017_per_acre"]
+          .first()   # or .mean(), depending on what you want
+          .sort_index()
+    )
+
+    terminal_cost_sorted = terminal_cost.sort_values(ascending=True)
+    return bus_to_terminal, sel, terminal_cost, terminal_cost_sorted
+
+
+@app.cell
+def _(np, sel):
+    CAPITAL_COSTS = np.array(sel.land_usd2017_per_acre)
+    return (CAPITAL_COSTS,)
 
 
 @app.cell
@@ -274,183 +291,15 @@ def device_index():
 
 
 @app.cell
-def _(mo):
-    mo.md("""## Baseline Planning (No Contingencies)""")
-    return
-
-
-@app.cell
-def _(
-    CAPITAL_COSTS,
-    DataCenterLoad,
-    GEN_SCALING_FACTOR,
-    INVESTMENT_NODE_CANDS,
-    LINE_SCALING_FACTOR,
-    LOAD_SCALING_FACTOR,
-    TIME_HORIZON,
-    WORKLOAD_PROFILE_PATH,
-    cp,
-    create_planning_devices,
-    device_index,
-    np,
-    pypsa_devices,
-    pypsa_net,
-    zap,
-):
-    # Configuration for baseline
-    num_dc_nodes = 3
-    total_dc_budget = 2.5  # GW
-
-    planning_devices_params_dict_v2 = {
-        "num_nodes": num_dc_nodes,
-        "investment_node_cands": INVESTMENT_NODE_CANDS,
-        "gen_scaling_factor": GEN_SCALING_FACTOR,
-        "load_scaling_factor": LOAD_SCALING_FACTOR,
-        "line_scaling_factor": LINE_SCALING_FACTOR,
-        "dc_nominal_capacity": 1.0,
-        "capital_costs": np.zeros_like(CAPITAL_COSTS),
-        "workload_profile": WORKLOAD_PROFILE_PATH,
-        "time_horizon": TIME_HORIZON,
-        "pypsa_net": pypsa_net,
-        "pypsa_devices": pypsa_devices,
-    }
-    baseline_devices = create_planning_devices(pypsa_devices, planning_devices_params_dict_v2)
-    dc_device_idx_v2 = device_index(baseline_devices, DataCenterLoad)
-
-    # Create dispatch layer (CVX-based for baseline)
-    baseline_layer = zap.DispatchLayer(
-        pypsa_net,
-        baseline_devices,
-        parameter_names={"dc_capacity": (dc_device_idx_v2, "nominal_capacity")},
-        time_horizon=TIME_HORIZON,
-        solver=cp.CLARABEL,
-    )
-
-    # Setup objectives
-    # Multi-objective: dispatch cost + tail LMP pressure at DC sites (encourages natural spreading).
-    baseline_cost_obj = zap.planning.DispatchCostObjective(pypsa_net, baseline_devices)
-    baseline_price_obj = zap.planning.DCTailPriceObjective(
-        baseline_devices,
-        dc_device_idx=dc_device_idx_v2,
-        lmp_metric="cvar",
-        cvar_alpha=0.95,
-        weight_by_capacity=True,
-        aggregation_across_dcs="sum",
-    )
-    baseline_op_obj = baseline_cost_obj + 0.05 * baseline_price_obj
-
-    base_inv_v2 = zap.planning.InvestmentObjective(baseline_devices, baseline_layer)
-    baseline_inv_obj = zap.planning.RegularizedInvestmentObjective(
-        base_inv_v2,
-        [zap.planning.CapacityL2Regularizer("dc_capacity", weight=1e-3)],
-    )
-
-    # Setup bounds
-    uniform_cap = total_dc_budget / num_dc_nodes
-    baseline_lower_bounds = {"dc_capacity": np.full(num_dc_nodes, 0.05)}
-    baseline_upper_bounds = {"dc_capacity": np.full(num_dc_nodes, min(2.5 * uniform_cap, 1.0))}
-
-    # Create planning problem
-    baseline_problem = zap.planning.PlanningProblem(
-        operation_objective=baseline_op_obj,
-        investment_objective=baseline_inv_obj,
-        layer=baseline_layer,
-        lower_bounds=baseline_lower_bounds,
-        upper_bounds=baseline_upper_bounds,
-    )
-
-    # Add budget constraint
-    baseline_problem.extra_projections = {
-        "dc_capacity": zap.planning.SimplexBudgetProjection(budget=total_dc_budget, strict=True)
-    }
-    return (
-        base_inv_v2,
-        baseline_cost_obj,
-        baseline_devices,
-        baseline_inv_obj,
-        baseline_layer,
-        baseline_lower_bounds,
-        baseline_op_obj,
-        baseline_price_obj,
-        baseline_problem,
-        baseline_upper_bounds,
-        dc_device_idx_v2,
-        num_dc_nodes,
-        planning_devices_params_dict_v2,
-        total_dc_budget,
-        uniform_cap,
-    )
-
-
-@app.cell
-def _(baseline_problem, np, num_dc_nodes, total_dc_budget):
-    print("Solving baseline planning (no contingencies)...")
-    baseline_init = {"dc_capacity": np.full(num_dc_nodes, total_dc_budget / num_dc_nodes)}
-    baseline_state, baseline_history = baseline_problem.solve(
-        num_iterations=5,
-        initial_state=baseline_init,
-    )
-
-    baseline_capacities = baseline_state["dc_capacity"]
-    print(f"Baseline capacities: {baseline_capacities}")
-    print(f"Total allocation: {baseline_capacities.sum():.3f} GW")
-    return baseline_capacities, baseline_history, baseline_init, baseline_state
-
-
-@app.cell
-def _(
-    CAPITAL_COSTS,
-    GEN_SCALING_FACTOR,
-    HOME_PATH,
-    INVESTMENT_NODE_CANDS,
-    LINE_SCALING_FACTOR,
-    LOAD_SCALING_FACTOR,
-    TIME_HORIZON,
-    cp,
-    create_planning_devices,
-    pypsa_devices,
-    pypsa_net,
-):
-    _lin_dev_params = {
-                "num_nodes": 3,
-                "investment_node_cands": INVESTMENT_NODE_CANDS,
-                "gen_scaling_factor": GEN_SCALING_FACTOR,
-                "load_scaling_factor": LOAD_SCALING_FACTOR,
-                "line_scaling_factor": LINE_SCALING_FACTOR,
-                "dc_nominal_capacity": 2.5,
-                "capital_costs": 0 * CAPITAL_COSTS,
-                "workload_profile": HOME_PATH
-                + "/zap/development/load_profiles/example_inference_azure_conv.csv",
-                "pypsa_net": pypsa_net,
-                "pypsa_devices": pypsa_devices,
-        "time_horizon": TIME_HORIZON
-    }
-    _lin_devices_eval = create_planning_devices(pypsa_devices, _lin_dev_params)
-    lin_outcome_eval = pypsa_net.dispatch(
-        devices=_lin_devices_eval[:-1],
-        time_horizon=96,
-        solver=cp.CLARABEL,
-        add_ground=False,
-    )
-    return (lin_outcome_eval,)
-
-
-@app.cell
-def _(lin_outcome_eval, np):
-    mu_lo = lin_outcome_eval.local_inequality_duals[3][0]
-    mu_hi = lin_outcome_eval.local_inequality_duals[3][1]
-    mu_sum = mu_lo + mu_hi
-    mu_sum_avg = mu_sum.mean(axis=1) # [251,]
-    k_lines = 10  # choose how many spikes you want
-    cong_lines = np.argsort(mu_sum_avg)[-k_lines:][::-1]   # indices of k largest
-    cong_lines
-    return cong_lines, k_lines, mu_hi, mu_lo, mu_sum, mu_sum_avg
-
-
-@app.cell
-def _(mo):
-    mo.md("""## SCOPF Planning (With N-1 Contingencies)""")
-    return
+def _(np):
+    # mu_lo = lin_outcome_eval.local_inequality_duals[3][0]
+    # mu_hi = lin_outcome_eval.local_inequality_duals[3][1]
+    # mu_sum = mu_lo + mu_hi
+    # mu_sum_avg = mu_sum.mean(axis=1) # [251,]
+    # k_lines = 10  # choose how many spikes you want
+    # cong_lines = np.argsort(mu_sum_avg)[-k_lines:][::-1]   # indices of k largest
+    cong_lines = np.array([168, 176, 88, 170, 49, 180, 149, 80, 73, 67])
+    return (cong_lines,)
 
 
 @app.cell
@@ -465,19 +314,24 @@ def _(
     LINE_SCALING_FACTOR,
     LOAD_SCALING_FACTOR,
     NUM_CONTINGENCIES,
+    SCOPFLMPObjective,
     TIME_HORIZON,
     WORKLOAD_PROFILE_PATH,
     cong_lines,
     create_planning_devices,
     device_index,
     np,
-    num_dc_nodes,
     pypsa_devices,
     pypsa_net,
+    sp,
     torch,
     zap,
 ):
-    # Create devices for SCOPF (torchified for ADMM)
+    num_dc_nodes = 3
+    total_dc_budget = 2.5
+
+
+    # Cell 12: SCOPF Planning (With N-1 Contingencies)
     planning_devices_params_dict = {
         "num_nodes": 3,
         "investment_node_cands": INVESTMENT_NODE_CANDS,
@@ -496,15 +350,11 @@ def _(
     # Torchify for ADMM
     scopf_devices = [d.torchify(machine="cpu", dtype=torch.float32) for d in scopf_devices_np]
 
-    # Setup contingency parameters
     line_device_idx_scopf = device_index(scopf_devices, zap.ACLine)
     dc_device_idx_scopf = device_index(scopf_devices, DataCenterLoad)
     num_lines = scopf_devices[line_device_idx_scopf].num_devices
 
-    # Pick contingency lines:
-    #   1) explicit override via CRITICAL_LINES
-    #   2) cong_lines if provided (e.g. top-k congested lines from a baseline run)
-    #   3) fallback: first NUM_CONTINGENCIES lines
+    # Pick contingency lines
     if CRITICAL_LINES is not None:
         critical_lines = [int(i) for i in np.asarray(CRITICAL_LINES).ravel().tolist()]
     elif cong_lines is not None:
@@ -517,12 +367,21 @@ def _(
     print(f"Total lines: {num_lines}")
     print(f"Contingencies: {num_contingencies}")
 
-    # Create contingency mask for chosen lines
-    contingency_mask = zap.planning.create_critical_line_contingency_mask(
-        critical_lines,
-        num_lines,
-        device="cpu",
-        dtype=torch.float32
+    # Create contingency mask
+    contingency_mask = sp.lil_matrix(
+        (num_contingencies, scopf_devices[line_device_idx_scopf].num_devices)
+    )
+
+    for idx, c in enumerate(cong_lines):
+        contingency_mask[idx, c] = 1.0
+
+    contingency_mask = contingency_mask.tocsr()
+    torch_mask = torch.tensor(contingency_mask.todense(), device="cpu", dtype=torch.float32)
+    torch_mask = torch.vstack(
+        [
+            torch.zeros(torch_mask.shape[1], device="cpu", dtype=torch.float32),
+            torch_mask,
+        ]
     )
 
     # Create ADMM solver
@@ -537,6 +396,7 @@ def _(
         resid_norm=2,
     )
 
+
     # Create SCOPF layer
     scopf_layer = ADMMLayer(
         network=pypsa_net,
@@ -546,95 +406,94 @@ def _(
         solver=scopf_solver,
         num_contingencies=num_contingencies,
         contingency_device=line_device_idx_scopf,
-        contingency_mask=contingency_mask,
+        contingency_mask=torch_mask,
     )
 
-    # Setup SCOPF objectives
-    # Multi-objective: expected dispatch cost + tail contingency overload + tail LMP pressure at DC sites.
-    scopf_cost_obj = zap.planning.SCOPFDispatchCostObjective(
-        pypsa_net,
-        scopf_devices,
-        contingency_device_idx=line_device_idx_scopf,
-        aggregation="cvar",
-        cvar_alpha=0.90,
-    )
+    scopf_lmp_obj = SCOPFLMPObjective(pypsa_net, scopf_devices)
 
-    # Penalize worst-case contingencies (tail over scenarios) rather than the mean.
-    scopf_overload_obj = 0.1 * zap.planning.SCOPFLineOverloadObjective(
-        scopf_devices,
-        line_device_idx=line_device_idx_scopf,
-        thr=0.95,
-        aggregation='cvar',
-        cvar_alpha=0.90,
-    )
-
-    scopf_price_obj = 0.05 * zap.planning.DCTailPriceObjective(
-        scopf_devices,
-        dc_device_idx=dc_device_idx_scopf,
-        lmp_metric="cvar",
-        cvar_alpha=0.95,
-        weight_by_capacity=True,
-        aggregation_across_dcs="sum",
-    )
-
-    scopf_op_obj = scopf_cost_obj + scopf_overload_obj + scopf_price_obj
+    scopf_op_obj = scopf_lmp_obj
 
     base_inv = zap.planning.InvestmentObjective(scopf_devices, scopf_layer)
-    scopf_inv_obj = zap.planning.RegularizedInvestmentObjective(
-        base_inv,
-        [zap.planning.CapacityL2Regularizer("dc_capacity", weight=1e-3)],
-    )
 
-    # Setup bounds (same as baseline)
     scopf_lower_bounds = {"dc_capacity": np.full(num_dc_nodes, 0.0)}
     scopf_upper_bounds = {"dc_capacity": np.full(num_dc_nodes, 2.5)}
 
-    # Create SCOPF planning problem
     scopf_problem = zap.planning.PlanningProblem(
         operation_objective=scopf_op_obj,
-        investment_objective=scopf_inv_obj,
+        investment_objective=base_inv,
         layer=scopf_layer,
         lower_bounds=scopf_lower_bounds,
         upper_bounds=scopf_upper_bounds,
     )
 
-    # Add budget constraint
     scopf_problem.extra_projections = {
         "dc_capacity": zap.planning.SimplexBudgetProjection(budget=2.5, strict=True)
     }
     return (
         base_inv,
+        c,
         contingency_mask,
         critical_lines,
         dc_device_idx_scopf,
+        idx,
         line_device_idx_scopf,
         num_contingencies,
+        num_dc_nodes,
         num_lines,
         planning_devices_params_dict,
-        scopf_cost_obj,
         scopf_devices,
         scopf_devices_np,
-        scopf_inv_obj,
         scopf_layer,
+        scopf_lmp_obj,
         scopf_lower_bounds,
         scopf_op_obj,
-        scopf_overload_obj,
-        scopf_price_obj,
         scopf_problem,
         scopf_solver,
         scopf_upper_bounds,
+        torch_mask,
+        total_dc_budget,
     )
 
 
 @app.cell
-def _(np, num_dc_nodes, scopf_problem, total_dc_budget):
+def _(cp, pypsa_net, scopf_devices):
+    base_outcome = pypsa_net.dispatch(
+        devices=scopf_devices[:-1],
+        time_horizon=96,
+        solver=cp.CLARABEL,
+        add_ground=False,
+    )
+    return (base_outcome,)
+
+
+@app.cell
+def _(num_contingencies, pypsa_net, scopf_devices, scopf_solver, torch_mask):
+    solution_admm, history_admm = scopf_solver.solve(
+        pypsa_net,
+        scopf_devices,
+        time_horizon=96,
+        num_contingencies=num_contingencies,
+        contingency_device=3,
+        contingency_mask=torch_mask,
+    )
+    return history_admm, solution_admm
+
+
+@app.cell
+def _(mo):
+    mo.md("""## SCOPF Planning (With N-1 Contingencies)""")
+    return
+
+
+@app.cell
+def _(num_dc_nodes, scopf_problem, torch, total_dc_budget):
     # Solve SCOPF planning
     print("Solving SCOPF planning (with N-1 contingencies)...")
-    scopf_init = {"dc_capacity": np.full(num_dc_nodes, total_dc_budget / num_dc_nodes)}
+    scopf_init = {"dc_capacity": torch.full((num_dc_nodes,), total_dc_budget / num_dc_nodes)}
 
     scopf_state, scopf_history = scopf_problem.solve(
         num_iterations=75,
-        initial_state=scopf_init
+        initial_state=None
     )
 
     scopf_capacities = scopf_state["dc_capacity"].detach().cpu().numpy()
@@ -653,18 +512,23 @@ def _(mo):
 def _(
     CAPITAL_COSTS,
     GEN_SCALING_FACTOR,
-    HOME_PATH,
     INVESTMENT_NODE_CANDS,
     LINE_SCALING_FACTOR,
     LOAD_SCALING_FACTOR,
     TIME_HORIZON,
-    cp,
+    WORKLOAD_PROFILE_PATH,
     create_planning_devices,
+    num_contingencies,
     pypsa_devices,
     pypsa_net,
     scopf_capacities,
+    scopf_devices,
+    scopf_solver,
+    torch_mask,
 ):
-    lin_dev_params_scopf = {
+    ## Simulate Contingency Solve with Planned Caps
+
+    planned_devices_params_dict = {
                 "num_nodes": 3,
                 "investment_node_cands": INVESTMENT_NODE_CANDS,
                 "gen_scaling_factor": GEN_SCALING_FACTOR,
@@ -672,38 +536,127 @@ def _(
                 "line_scaling_factor": LINE_SCALING_FACTOR,
                 "dc_nominal_capacity": scopf_capacities,
                 "capital_costs": 0 * CAPITAL_COSTS,
-                "workload_profile": HOME_PATH
-                + "/zap/development/load_profiles/example_inference_azure_conv.csv",
+                "workload_profile": WORKLOAD_PROFILE_PATH,
                 "pypsa_net": pypsa_net,
                 "pypsa_devices": pypsa_devices,
         "time_horizon": TIME_HORIZON
     }
-    lin_devices_scopf = create_planning_devices(pypsa_devices, lin_dev_params_scopf)
-    lin_outcome_scopf = pypsa_net.dispatch(
-        devices=lin_devices_scopf,
+    planned_devices = create_planning_devices(pypsa_devices, planned_devices_params_dict)
+
+    planned_solution_admm, planned_history_admm = scopf_solver.solve(
+        pypsa_net,
+        scopf_devices,
         time_horizon=96,
-        solver=cp.CLARABEL,
-        add_ground=False,
+        num_contingencies=num_contingencies,
+        contingency_device=3,
+        contingency_mask=torch_mask,
     )
-    return lin_dev_params_scopf, lin_devices_scopf, lin_outcome_scopf
+
+    planned_outcome = planned_solution_admm.as_outcome()
+    return (
+        planned_devices,
+        planned_devices_params_dict,
+        planned_history_admm,
+        planned_outcome,
+        planned_solution_admm,
+    )
 
 
 @app.cell
-def _(deepcopy, lin_outcome_eval, lin_outcome_scopf, np, pd):
-    def cvar_upper_tail(values, alpha: float):
-        """
-        Upper-tail CVaR for "higher is worse" scalars.
-        values: 1D array-like
-        alpha: in (0, 1)
-        """
-        x = np.asarray(values, dtype=float).ravel()
-        x = x[np.isfinite(x)]
-        if x.size == 0:
-            return np.nan
-        x = np.sort(x)  # ascending
-        k0 = int(np.floor(float(alpha) * x.size))
-        k0 = min(max(k0, 0), x.size - 1)
-        return float(x[k0:].mean())
+def _(
+    CAPITAL_COSTS,
+    GEN_SCALING_FACTOR,
+    INVESTMENT_NODE_CANDS,
+    LINE_SCALING_FACTOR,
+    LOAD_SCALING_FACTOR,
+    TIME_HORIZON,
+    WORKLOAD_PROFILE_PATH,
+    create_planning_devices,
+    np,
+    num_contingencies,
+    pypsa_devices,
+    pypsa_net,
+    scopf_solver,
+    torch,
+    torch_mask,
+):
+    ## Run the single node injection across all the contingencies
+
+    sn_devices_params_dict = {
+                "num_nodes": 3,
+                "investment_node_cands": INVESTMENT_NODE_CANDS,
+                "gen_scaling_factor": GEN_SCALING_FACTOR,
+                "load_scaling_factor": LOAD_SCALING_FACTOR,
+                "line_scaling_factor": LINE_SCALING_FACTOR,
+                "dc_nominal_capacity": np.array([0, 0, 2.5]),
+                "capital_costs": 0 * CAPITAL_COSTS,
+                "workload_profile": WORKLOAD_PROFILE_PATH,
+                "pypsa_net": pypsa_net,
+                "pypsa_devices": pypsa_devices,
+        "time_horizon": TIME_HORIZON
+    }
+    sn_devices = create_planning_devices(pypsa_devices, sn_devices_params_dict)
+    sn_devices_admm = [d.torchify(machine="cpu", dtype=torch.float32) for d in sn_devices]
+
+    sn_solution_admm, sn_history_admm = scopf_solver.solve(
+        pypsa_net,
+        sn_devices_admm,
+        time_horizon=96,
+        num_contingencies=num_contingencies,
+        contingency_device=3,
+        contingency_mask=torch_mask,
+    )
+
+    sn_outcome = sn_solution_admm.as_outcome()
+
+    return (
+        sn_devices,
+        sn_devices_admm,
+        sn_devices_params_dict,
+        sn_history_admm,
+        sn_outcome,
+        sn_solution_admm,
+    )
+
+
+@app.cell
+def _(compute_metrics, np, sn_outcome):
+    sn_metrics = compute_metrics(sn_outcome, np.array([0, 0, 2.5]))
+    return (sn_metrics,)
+
+
+@app.cell
+def _(sn_metrics):
+    sn_metrics
+    return
+
+
+@app.cell
+def _(scopf_problem):
+    scopf_problem.get_op_cost()
+    return
+
+
+@app.cell
+def _(CAPITAL_COSTS, compute_metrics, planned_outcome, scopf_capacities):
+    scopf_planned_metrics = compute_metrics(planned_outcome, scopf_capacities, capital_costs=CAPITAL_COSTS)
+    return (scopf_planned_metrics,)
+
+
+@app.cell
+def _(scopf_planned_metrics):
+    scopf_planned_metrics["mean_max_lmp"]
+    return
+
+
+@app.cell
+def _(plt, scopf_planned_metrics, sn_metrics):
+    plt.plot((sn_metrics["mean_max_lmp"] - scopf_planned_metrics["mean_max_lmp"])/sn_metrics["mean_max_lmp"] * 100)
+    return
+
+
+@app.cell
+def _(CAPITAL_COSTS, np):
 
     def node_price_summaries(prices, topk=5, q=(0.95, 0.99)):
         """
@@ -721,165 +674,62 @@ def _(deepcopy, lin_outcome_eval, lin_outcome_scopf, np, pd):
         out["max"] = prices.max(axis=1)
         return out
 
+
+    def compute_metrics(distributed_outcome, planned_dc_capacities, capital_costs = CAPITAL_COSTS):
+
+        metrics = {}
+
+        # DC Land Cost
+        if planned_dc_capacities is not None:
+            num_nodes = len(planned_dc_capacities)
+            metrics["dc_land_cost"] = np.dot(1000*planned_dc_capacities, capital_costs[:num_nodes])
+        else:
+            metrics["dc_land_cost"] = None
+
+        # Mean Max LMP
+        lmps = distributed_outcome.prices
+        if len(lmps.shape) == 2:
+            # Mean max LMP
+            dist_stats = node_price_summaries(lmps, topk=5)
+            mean_max_lmp = np.mean(dist_stats["max"])
+            metrics["mean_max_lmp"] = mean_max_lmp * 100.0 * 4.0
+
+            # Dispatch Cost
+            metrics["dispatch"] = distributed_outcome.problem.value
+
+            # Mean Max Line Dual
+            mu_sum = distributed_outcome.local_inequality_duals[3][0] + distributed_outcome.local_inequality_duals[3][1]
+            mean_max_line_dual = np.mean(mu_sum.max(axis=1))
+            metrics["mean_max_line_dual"] = mean_max_line_dual
+        elif len(lmps.shape) == 3:
+            num_scenarios = lmps.shape[-1]
+            mean_max_lmp_results = []
+            mean_max_line_dual_results = []
+            for i in range(num_scenarios):
+                cur_scenario_lmps = lmps[:,:,i]
+
+                # Mean Max LMP
+                dist_stats = node_price_summaries(cur_scenario_lmps, topk=5)
+                mean_max_lmp = np.mean(dist_stats["max"])
+                mean_max_lmp_results.append(mean_max_lmp * 100.0 * 4.0)
+
+                # # Mean Max Line Dual
+                # mu_sum = distributed_outcome.local_inequality_duals[3][0][]
+
+            
+            metrics["mean_max_lmp"] = np.array(mean_max_lmp_results) 
+        
+
+        return metrics
+
     def get_congestion_metric(dispatch_outcome, *, line_device_idx: int = 3):
         mu_lo = dispatch_outcome.local_inequality_duals[line_device_idx][0]  # (L,T)
         mu_hi = dispatch_outcome.local_inequality_duals[line_device_idx][1]  # (L,T)
         mu = np.max(mu_lo + mu_hi, axis=1)  # max over time -> (L,)
         return float(np.mean(mu))
 
-    def safe_dispatch(pypsa_net, devices, *, time_horizon, solver, add_ground: bool):
-        try:
-            out = pypsa_net.dispatch(
-                devices=devices,
-                time_horizon=time_horizon,
-                solver=solver,
-                add_ground=add_ground,
-            )
-            return {"ok": True, "outcome": out, "status": str(out.problem.status)}
-        except Exception as e:
-            # PowerNetwork.dispatch asserts OPTIMAL / OPTIMAL_INACCURATE. With add_ground=False,
-            # infeasibility is expected for some N-1 outages. We treat that as a failed scenario.
-            return {"ok": False, "outcome": None, "status": f"{type(e).__name__}: {e}"}
 
-    def _zero_out_line(devs, line_device_idx: int, line_idx: int):
-        dev = devs[line_device_idx]
-        cap = np.asarray(dev.nominal_capacity)
-        cap = cap.copy()
-        if cap.ndim == 1:
-            cap[line_idx] = 0.0
-        else:
-            cap[line_idx, ...] = 0.0
-        dev.nominal_capacity = cap
-        return devs
-
-    def evaluate_n1_cvx(
-        *,
-        pypsa_net,
-        base_devices,
-        critical_lines,
-        dc_terminals,
-        time_horizon: int,
-        solver,
-        add_ground: bool,
-        cvar_alpha: float = 0.90,
-        method: str = "method",
-        line_device_idx: int = 3,
-    ):
-        rows = []
-
-        def _row(scenario_name: str, out):
-            if not out["ok"]:
-                return {
-                    "method": method,
-                    "scenario": scenario_name,
-                    "feasible": False,
-                    "status": out["status"],
-                    "dispatch_cost": np.inf,
-                    "congestion_metric": np.inf,
-                    "dc_mean_max_lmp": np.inf,
-                }
-            outcome = out["outcome"]
-            dc_prices = outcome.prices[np.asarray(dc_terminals, dtype=int), :]
-            dc_stats = node_price_summaries(dc_prices, topk=5)
-            return {
-                "method": method,
-                "scenario": scenario_name,
-                "feasible": True,
-                "status": out["status"],
-                "dispatch_cost": float(outcome.problem.value) * 100.0,
-                "congestion_metric": get_congestion_metric(outcome, line_device_idx=line_device_idx),
-                "dc_mean_max_lmp": float(np.mean(dc_stats["max"])) * 100.0 * 4.0,
-            }
-
-        base_out = safe_dispatch(
-            pypsa_net,
-            base_devices,
-            time_horizon=time_horizon,
-            solver=solver,
-            add_ground=add_ground,
-        )
-        rows.append(_row("base", base_out))
-
-        for line_idx in list(critical_lines):
-            devs = deepcopy(base_devices)
-            devs = _zero_out_line(devs, line_device_idx=line_device_idx, line_idx=int(line_idx))
-            out = safe_dispatch(
-                pypsa_net,
-                devs,
-                time_horizon=time_horizon,
-                solver=solver,
-                add_ground=add_ground,
-            )
-            rows.append(_row(f"outage_line_{int(line_idx)}", out))
-
-        df = pd.DataFrame(rows)
-
-        base = df[df["scenario"] == "base"].iloc[0].to_dict()
-        cont = df[df["scenario"] != "base"].copy()
-        infeas = int((~cont["feasible"]).sum())
-        if infeas > 0:
-            agg = {
-                "method": method,
-                "contingency_count": int(cont.shape[0]),
-                "infeasible_count": infeas,
-                "cvar_alpha": float(cvar_alpha),
-                "base_dispatch_cost": float(base["dispatch_cost"]),
-                "base_congestion_metric": float(base["congestion_metric"]),
-                "base_dc_mean_max_lmp": float(base["dc_mean_max_lmp"]),
-                "mean_dispatch_cost": np.inf,
-                "mean_congestion_metric": np.inf,
-                "mean_dc_mean_max_lmp": np.inf,
-                "max_dispatch_cost": np.inf,
-                "max_congestion_metric": np.inf,
-                "max_dc_mean_max_lmp": np.inf,
-                "cvar_dispatch_cost": np.inf,
-                "cvar_congestion_metric": np.inf,
-                "cvar_dc_mean_max_lmp": np.inf,
-            }
-        else:
-            agg = {
-                "method": method,
-                "contingency_count": int(cont.shape[0]),
-                "infeasible_count": 0,
-                "cvar_alpha": float(cvar_alpha),
-                "base_dispatch_cost": float(base["dispatch_cost"]),
-                "base_congestion_metric": float(base["congestion_metric"]),
-                "base_dc_mean_max_lmp": float(base["dc_mean_max_lmp"]),
-                "mean_dispatch_cost": float(cont["dispatch_cost"].mean()),
-                "mean_congestion_metric": float(cont["congestion_metric"].mean()),
-                "mean_dc_mean_max_lmp": float(cont["dc_mean_max_lmp"].mean()),
-                "max_dispatch_cost": float(cont["dispatch_cost"].max()),
-                "max_congestion_metric": float(cont["congestion_metric"].max()),
-                "max_dc_mean_max_lmp": float(cont["dc_mean_max_lmp"].max()),
-                "cvar_dispatch_cost": cvar_upper_tail(cont["dispatch_cost"], alpha=cvar_alpha),
-                "cvar_congestion_metric": cvar_upper_tail(cont["congestion_metric"], alpha=cvar_alpha),
-                "cvar_dc_mean_max_lmp": cvar_upper_tail(cont["dc_mean_max_lmp"], alpha=cvar_alpha),
-            }
-
-        return df, pd.DataFrame([agg])
-
-    # Keep existing quick base-case metrics (for sanity)
-        met_base = {
-            "dispatch_cost": float(lin_outcome_eval.problem.value) * 100.0,
-            "congestion_metric": get_congestion_metric(lin_outcome_eval, line_device_idx=3),
-            "mean_max_lmp_system": float(np.mean(node_price_summaries(lin_outcome_eval.prices)["max"]))
-            * 100.0
-            * 4.0,
-        }
-        met_scopf = {
-            "dispatch_cost": float(lin_outcome_scopf.problem.value) * 100.0,
-            "congestion_metric": get_congestion_metric(lin_outcome_scopf, line_device_idx=3),
-            "mean_max_lmp_system": float(np.mean(node_price_summaries(lin_outcome_scopf.prices)["max"]))
-            * 100.0
-            * 4.0,
-        }
-    return (
-        cvar_upper_tail,
-        evaluate_n1_cvx,
-        get_congestion_metric,
-        node_price_summaries,
-        safe_dispatch,
-    )
+    return compute_metrics, get_congestion_metric, node_price_summaries
 
 
 @app.cell

@@ -42,29 +42,3 @@ class InvestmentObjective(AbstractInvestmentObjective):
         costs = [d.get_investment_cost(la=la, **param) for d, param in zip(devices, parameters)]
 
         return sum(costs)
-
-
-class CapacityL2Regularizer(AbstractInvestmentObjective):
-    """Small strictly-convex tie-breaker: weight * ||x||_2^2 for a chosen planning variable."""
-
-    def __init__(self, parameter_name: str, weight: float = 1e-3):
-        self.parameter_name = parameter_name
-        self.weight = float(weight)
-
-    def forward(self, la=np, **kwargs):
-        x = kwargs[self.parameter_name]
-        if la == torch:
-            return self.weight * torch.sum(x**2)
-        x = np.asarray(x)
-        return self.weight * float(np.sum(x**2))
-
-
-class RegularizedInvestmentObjective(AbstractInvestmentObjective):
-    """Wrap an investment objective with additional regularizers."""
-
-    def __init__(self, base: AbstractInvestmentObjective, regularizers: list[AbstractInvestmentObjective]):
-        self.base = base
-        self.regularizers = regularizers
-
-    def forward(self, la=np, **kwargs):
-        return self.base(la=la, **kwargs) + sum(r(la=la, **kwargs) for r in self.regularizers)

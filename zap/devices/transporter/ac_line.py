@@ -304,7 +304,7 @@ def _admm_prox_update(
     return [p0, p1], [theta0, theta1], None
 
 
-@torch.jit.script
+# @torch.jit.script
 def _admm_prox_update_masked(
     power: list[torch.Tensor],
     angle: list[torch.Tensor],
@@ -330,6 +330,9 @@ def _admm_prox_update_masked(
     # Solve for other variables
     p0 = -p1
     theta1 = torch.where(bool_mask, angle[1], 0.5 * angle[0] + 0.5 * angle[1] - mu * p1)
-    theta0 = torch.where(bool_mask, angle[0], theta1 + p1 / b)
+    # theta0 = torch.where(bool_mask, angle[0], theta1 + p1 / b)
+
+    b_safe = torch.where(bool_mask, -1324.0 * torch.ones_like(b), b)
+    theta0 = torch.where(bool_mask, angle[0], theta1 + p1 / b_safe)
 
     return [p0, p1], [theta0, theta1], None

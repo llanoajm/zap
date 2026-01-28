@@ -327,18 +327,18 @@ def _(
     torch,
     zap,
 ):
-    num_dc_nodes = 3
+    num_dc_nodes = 10
     total_dc_budget = 2.5
 
 
     # Cell 12: SCOPF Planning (With N-1 Contingencies)
     planning_devices_params_dict = {
-        "num_nodes": 3,
+        "num_nodes": num_dc_nodes,
         "investment_node_cands": INVESTMENT_NODE_CANDS,
         "gen_scaling_factor": GEN_SCALING_FACTOR,
         "load_scaling_factor": LOAD_SCALING_FACTOR,
         "line_scaling_factor": LINE_SCALING_FACTOR,
-        "dc_nominal_capacity": 2.5,
+        "dc_nominal_capacity": total_dc_budget,
         "capital_costs": np.zeros_like(CAPITAL_COSTS),
         "workload_profile": WORKLOAD_PROFILE_PATH,
         "time_horizon": TIME_HORIZON,
@@ -416,7 +416,7 @@ def _(
     base_inv = zap.planning.InvestmentObjective(scopf_devices, scopf_layer)
 
     scopf_lower_bounds = {"dc_capacity": np.full(num_dc_nodes, 0.0)}
-    scopf_upper_bounds = {"dc_capacity": np.full(num_dc_nodes, 2.5)}
+    scopf_upper_bounds = {"dc_capacity": np.full(num_dc_nodes, total_dc_budget)}
 
     scopf_problem = zap.planning.PlanningProblem(
         operation_objective=scopf_op_obj,
@@ -427,7 +427,7 @@ def _(
     )
 
     scopf_problem.extra_projections = {
-        "dc_capacity": zap.planning.SimplexBudgetProjection(budget=2.5, strict=True)
+        "dc_capacity": zap.planning.SimplexBudgetProjection(budget=total_dc_budget, strict=True)
     }
     return (
         base_inv,
@@ -529,7 +529,7 @@ def _(
     ## Simulate Contingency Solve with Planned Caps
 
     planned_devices_params_dict = {
-                "num_nodes": 3,
+                "num_nodes": 10,
                 "investment_node_cands": INVESTMENT_NODE_CANDS,
                 "gen_scaling_factor": GEN_SCALING_FACTOR,
                 "load_scaling_factor": LOAD_SCALING_FACTOR,
@@ -579,16 +579,19 @@ def _(
     scopf_solver,
     torch,
     torch_mask,
+    total_dc_budget,
 ):
     ## Run the single node injection across all the contingencies
 
+
+
     sn_devices_params_dict = {
-                "num_nodes": 3,
+                "num_nodes": 10,
                 "investment_node_cands": INVESTMENT_NODE_CANDS,
                 "gen_scaling_factor": GEN_SCALING_FACTOR,
                 "load_scaling_factor": LOAD_SCALING_FACTOR,
                 "line_scaling_factor": LINE_SCALING_FACTOR,
-                "dc_nominal_capacity": np.array([0, 0, 2.5]),
+                "dc_nominal_capacity": np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, total_dc_budget]),
                 "capital_costs": 0 * CAPITAL_COSTS,
                 "workload_profile": WORKLOAD_PROFILE_PATH,
                 "pypsa_net": pypsa_net,
@@ -608,7 +611,6 @@ def _(
     )
 
     sn_outcome = sn_solution_admm.as_outcome()
-
     return (
         sn_devices,
         sn_devices_admm,
@@ -620,8 +622,8 @@ def _(
 
 
 @app.cell
-def _(compute_metrics, np, sn_outcome):
-    sn_metrics = compute_metrics(sn_outcome, np.array([0, 0, 2.5]))
+def _(compute_metrics, np, sn_outcome, total_dc_budget):
+    sn_metrics = compute_metrics(sn_outcome, np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, total_dc_budget]))
     return (sn_metrics,)
 
 
@@ -657,7 +659,6 @@ def _(plt, scopf_planned_metrics, sn_metrics):
 
 @app.cell
 def _(CAPITAL_COSTS, np):
-
     def node_price_summaries(prices, topk=5, q=(0.95, 0.99)):
         """
         prices: [N,T]
@@ -716,9 +717,9 @@ def _(CAPITAL_COSTS, np):
                 # # Mean Max Line Dual
                 # mu_sum = distributed_outcome.local_inequality_duals[3][0][]
 
-            
+
             metrics["mean_max_lmp"] = np.array(mean_max_lmp_results) 
-        
+
 
         return metrics
 
@@ -727,8 +728,6 @@ def _(CAPITAL_COSTS, np):
         mu_hi = dispatch_outcome.local_inequality_duals[line_device_idx][1]  # (L,T)
         mu = np.max(mu_lo + mu_hi, axis=1)  # max over time -> (L,)
         return float(np.mean(mu))
-
-
     return compute_metrics, get_congestion_metric, node_price_summaries
 
 

@@ -7,8 +7,6 @@ from zap.planning.solvers import GradientDescent
 
 from zap.planning.investment_objectives import (
     InvestmentObjective,
-    CapacityL2Regularizer,
-    RegularizedInvestmentObjective,
 )
 from zap.planning.operation_objectives import (
     DispatchCostObjective,

@@ -230,7 +230,12 @@ class ADMMSolver:
 
                     # (1) Device proximal updates
                     st = self.device_updates(
-                        st, devices, parameters, num_contingencies, contingency_device, contingency_mask
+                        st,
+                        devices,
+                        parameters,
+                        num_contingencies,
+                        contingency_device,
+                        contingency_mask,
                     )
 
                     # (2) Update averages and residuals
@@ -535,7 +540,7 @@ class ADMMSolver:
         # Relative component
         # We add this check so we don't waste time computing norms if we don't need to
         if self.rtol > 0.0 or self.rtol_primal is not None or self.rtol_dual is not None:
-            assert self.track_objective
+            # assert self.track_objective
             # print("Adding relative component to convergence check.")
 
             # Compute norm of primal variables

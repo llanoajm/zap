@@ -1,5 +1,7 @@
 """Benders decomposition solver for capacity planning."""
 
+from copy import deepcopy
+
 import cvxpy as cp
 import numpy as np
 
@@ -17,6 +19,11 @@ class BendersSolver:
 
     where Q(u) is the optimal dispatch cost given datacenter capacities u.
     The dispatch_scalar allows balancing investment vs operation costs.
+
+    Infeasible subproblems are handled by a penalized (curtailable) fallback
+    layer. DC loads can be shed in the fallback at VoLL cost, so the subproblem
+    is always feasible. The master naturally avoids infeasible allocations
+    because VoLL >> any real dispatch cost.
     """
 
     def __init__(
@@ -62,6 +69,20 @@ class BendersSolver:
         # Cut storage: list of (alpha, pi) tuples
         self.cuts = []
 
+        # Build penalized (curtailable) fallback layer for infeasible subproblems.
+        # DC loads can be shed at VoLL cost, so this layer is always feasible.
+        penalized_devices = [deepcopy(d) for d in layer.devices]
+        dc_dev = penalized_devices[self.dc_device_idx]
+        dc_dev.max_power = np.zeros_like(dc_dev.max_power)  # allow curtailment
+
+        self.penalized_layer = DispatchLayer(
+            network=layer.network,
+            devices=penalized_devices,
+            parameter_names=layer.parameter_names,
+            time_horizon=layer.time_horizon,
+            solver=solver,
+        )
+
     def solve_master(self) -> tuple[np.ndarray, float]:
         """
         Solve master problem:
@@ -96,30 +117,36 @@ class BendersSolver:
 
         return u.value, self.dispatch_scalar * eta.value
 
-    def solve_subproblem(self, u: np.ndarray) -> tuple[float, DispatchOutcome]:
+    def solve_subproblem(self, u: np.ndarray) -> tuple[float, DispatchOutcome, bool]:
         """
         Solve dispatch subproblem Q(u) for given datacenter capacities.
 
-        Returns: (Q_value, DispatchOutcome with duals)
+        Falls back to the penalized (curtailable) layer if the primary dispatch
+        is infeasible. Returns a flag indicating which layer was used.
+
+        Returns: (Q_value, DispatchOutcome with duals, is_penalized)
         """
-        # Create parameter dict for DispatchLayer
         kwargs = {self.param_name: u}
-        print(kwargs)
+        is_penalized = False
 
-        # Solve dispatch using layer.forward()
-        outcome = self.layer.forward(**kwargs)
+        try:
+            outcome = self.layer.forward(**kwargs)
+            active_layer = self.layer
+        except AssertionError:
+            is_penalized = True
+            outcome = self.penalized_layer.forward(**kwargs)
+            active_layer = self.penalized_layer
 
-        # Compute operation cost Q(u)
-        parameters = self.layer.setup_parameters(**kwargs)
-        Q = self.layer.network.operation_cost(
-            self.layer.devices,
+        parameters = active_layer.setup_parameters(**kwargs)
+        Q = active_layer.network.operation_cost(
+            active_layer.devices,
             outcome.power,
             outcome.angle,
             outcome.local_variables,
             parameters=parameters,
         )
 
-        return Q, outcome
+        return Q, outcome, is_penalized
 
     def generate_cut(self, u: np.ndarray, Q: float, outcome: DispatchOutcome):
         """
@@ -166,11 +193,11 @@ class BendersSolver:
             - 'u': optimal datacenter capacities
             - 'objective': optimal total cost (investment + dispatch)
             - 'num_iterations': iterations until convergence
-            - 'history': dict with LB, UB, gap, u per iteration
+            - 'history': dict with LB, UB, gap, u, Q, is_penalized per iteration
         """
         LB = -np.inf  # Lower bound from master
         UB = np.inf  # Upper bound from subproblem
-        history = {"LB": [], "UB": [], "gap": [], "u": [], "Q": []}
+        history = {"LB": [], "UB": [], "gap": [], "u": [], "Q": [], "is_penalized": []}
 
         for k in range(max_iter):
             # Step 1: Solve master problem (or use initial_u for first iteration)
@@ -180,17 +207,19 @@ class BendersSolver:
             else:
                 u_k, eta_k = self.solve_master()
 
-            print(u_k)
             inv_cost_k = self.capital_cost @ u_k
             LB = inv_cost_k + eta_k
 
-            # Step 2: Solve subproblem
-            Q_k, outcome = self.solve_subproblem(u_k)
-            total_cost_k = inv_cost_k + self.dispatch_scalar * Q_k
-            UB = min(UB, total_cost_k)
+            # Step 2: Solve subproblem (with penalized fallback for infeasible allocations)
+            Q_k, outcome, is_penalized = self.solve_subproblem(u_k)
+
+            # Only update UB on feasible (non-penalized) subproblems
+            if not is_penalized:
+                total_cost_k = inv_cost_k + self.dispatch_scalar * Q_k
+                UB = min(UB, total_cost_k)
 
             # Step 3: Check convergence
-            gap = (UB - LB) / max(abs(UB), 1e-10)
+            gap = (UB - LB) / max(abs(UB), 1e-10) if UB < np.inf else np.inf
 
             # Record history
             history["LB"].append(LB)
@@ -198,11 +227,13 @@ class BendersSolver:
             history["gap"].append(gap)
             history["u"].append(u_k.copy())
             history["Q"].append(Q_k)
+            history["is_penalized"].append(is_penalized)
 
             if verbose:
+                status = " [INFEASIBLE->penalized]" if is_penalized else ""
                 print(
                     f"Iter {k}: LB={LB:.4f}, UB={UB:.4f}, gap={gap:.2%}, "
-                    f"inv={inv_cost_k:.4f}, Q={Q_k:.4f}"
+                    f"inv={inv_cost_k:.4f}, Q={Q_k:.4f}{status}"
                 )
 
             if gap < tol:
@@ -210,7 +241,7 @@ class BendersSolver:
                     print(f"Converged in {k + 1} iterations!")
                 break
 
-            # Step 4: Generate Benders cut
+            # Step 4: Generate Benders cut (penalized duals are valid for cut generation)
             self.generate_cut(u_k, Q_k, outcome)
 
         return {

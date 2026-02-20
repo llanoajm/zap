@@ -430,7 +430,7 @@ class DataCenterLoad(AbstractInjector):
 
         self.profile = np.vstack(all_profiles)  # shape (n_dc, T), per-unit
         self.min_power = -self.profile  # withdraw
-        # self.max_power = np.zeros_like(self.profile)
+        # self.max_power = np.zeros_like(self.profile)  # allow for curtailment
         self.max_power = -self.profile  # fixed load cannot be curtailed
 
         super_class = super()

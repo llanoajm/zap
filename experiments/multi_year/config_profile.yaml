@@ -1,0 +1,50 @@
+# Profiling config — small run to identify per-iteration bottlenecks with py-spy
+# Usage:
+#   py-spy record --output profile.svg --format speedscope --  python -u experiments/multi_year/runner.py experiments/multi_year/config_profile.yaml
+
+name: profile_run
+
+network_files:
+  - 2011_raw_network.nc
+  - 2012_raw_network.nc
+
+emissions_weight: 0.0
+
+block_size: 24
+sampling_strategy: all
+seed: 42
+
+pypsa_args:
+  power_unit: 1000.0
+  cost_unit: 1.0
+
+# Single worker — avoids ptrace issues with py-spy on Sherlock
+num_workers: 1
+dispatch_solver: MOSEK
+solver_kwargs:
+  verbose: false
+  accept_unknown: true
+  mosek_params:
+    MSK_IPAR_NUM_THREADS: 1
+
+optimizer:
+  batch_size: 32             # match experiment config batch size
+  num_iterations: 5           # just enough iterations to profile
+  step_size: 0.001
+  clip: 5000
+  batch_strategy: sequential
+  track_full_loss_every: 100000
+  init_full_loss: false
+  initial_state: default
+  save_param_history: false
+
+eval_final_full_loss: false
+
+wandb:
+  enabled: false
+
+export:
+  should_export: false
+
+relaxation:
+  should_solve: false

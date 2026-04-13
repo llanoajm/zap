@@ -504,21 +504,22 @@ def get_wandb_trackers(problem, sampler, relaxation_result, config):
     ]
 
     def emissions_tracker(J, grad, params, last_state, prob):
-        # Recompute parameters from the raw state dict (numpy) to match the
-        # numpy dispatch states, avoiding torch/numpy mixing.
-        states = [sub.state for sub in prob.subproblems]
-        parameters = [sub.layer.setup_parameters(**params) for sub in prob.subproblems]
+        # Only evaluate subproblems in the current batch (others may not have state)
+        batch = prob.batch
+        states = [prob.subproblems[b].state for b in batch]
+        parameters = [prob.subproblems[b].layer.setup_parameters(**params) for b in batch]
         return sum(
-            eo(s, parameters=p)
-            for eo, s, p in zip(emissions_objectives, states, parameters)
+            emissions_objectives[b](s, parameters=p)
+            for b, s, p in zip(batch, states, parameters)
         )
 
     def cost_tracker(J, grad, params, last_state, prob):
-        states = [sub.state for sub in prob.subproblems]
-        parameters = [sub.layer.setup_parameters(**params) for sub in prob.subproblems]
+        batch = prob.batch
+        states = [prob.subproblems[b].state for b in batch]
+        parameters = [prob.subproblems[b].layer.setup_parameters(**params) for b in batch]
         return sum(
-            co(s, parameters=p)
-            for co, s, p in zip(cost_objectives, states, parameters)
+            cost_objectives[b](s, parameters=p)
+            for b, s, p in zip(batch, states, parameters)
         )
 
     lower_bound = relaxation_result["lower_bound"] if relaxation_result else None
@@ -526,8 +527,12 @@ def get_wandb_trackers(problem, sampler, relaxation_result, config):
     trackers = {
         "emissions": emissions_tracker,
         "fuel_costs": cost_tracker,
-        "inv_cost": lambda J, grad, params, last_state, prob: prob.inv_cost.item(),
-        "op_cost": lambda J, grad, params, last_state, prob: prob.op_cost.item(),
+        "inv_cost": lambda J, grad, params, last_state, prob: sum(
+            prob.subproblems[b].inv_cost for b in prob.batch
+        ),
+        "op_cost": lambda J, grad, params, last_state, prob: sum(
+            prob.subproblems[b].op_cost for b in prob.batch
+        ),
         "batch": lambda J, grad, params, last_state, prob: prob.batch[0],
         "lower_bound": lambda *args: lower_bound if lower_bound is not None else np.nan,
     }
@@ -549,7 +554,7 @@ def get_wandb_trackers(problem, sampler, relaxation_result, config):
 
     def full_loss_tracker(J, grad, params, last_state, prob):
         iteration = prob.iteration
-        if iteration % track_full_loss_every == 0:
+        if iteration > 0 and iteration % track_full_loss_every == 0:
             logger.info(f"Evaluating full loss at iteration {iteration}...")
             _full_loss_cache["value"] = prob(**params)
         return _full_loss_cache["value"]
@@ -698,17 +703,62 @@ def run_experiment(config: dict) -> dict:
     lower_bounds, upper_bounds = setup_bounds(
         sampler.base_devices, parameter_names, power_unit=power_unit
     )
-    for p in parameter_names:
+    for p, (device_idx, attr_name) in parameter_names.items():
         logger.info(
             f"  {p}: lower=[{lower_bounds[p].min():.1f}, {lower_bounds[p].max():.1f}], "
             f"upper=[{upper_bounds[p].min():.1f}, {upper_bounds[p].max():.1f}]"
         )
+        dev = sampler.base_devices[device_idx]
+        names = np.asarray(dev.name).reshape(-1) if hasattr(dev.name, '__len__') else np.array([dev.name])
+        existing_mask = np.array(["existing" in str(n) for n in names])
+        lb_flat = lower_bounds[p].flatten()
+        ub_flat = upper_bounds[p].flatten()
+        if hasattr(dev, "fuel_type"):
+            fuel_types = np.asarray(dev.fuel_type).reshape(-1)
+            for ft in sorted(set(fuel_types)):
+                ft_mask = fuel_types == ft
+                lb = lb_flat[ft_mask]
+                ub = ub_flat[ft_mask]
+                logger.info(
+                    f"    {ft} ({ft_mask.sum()}): "
+                    f"lower=[{lb.min():.1f}, {lb.max():.1f}], "
+                    f"upper=[{ub.min():.1f}, {ub.max():.1f}]"
+                )
+                ft_existing = ft_mask & existing_mask
+                if ft_existing.any():
+                    lb_ex = lb_flat[ft_existing]
+                    ub_ex = ub_flat[ft_existing]
+                    logger.info(
+                        f"      existing ({ft_existing.sum()}): "
+                        f"lower=[{lb_ex.min():.1f}, {lb_ex.max():.1f}], "
+                        f"upper=[{ub_ex.min():.1f}, {ub_ex.max():.1f}]"
+                    )
+        else:
+            if existing_mask.any():
+                lb_ex = lb_flat[existing_mask]
+                ub_ex = ub_flat[existing_mask]
+                logger.info(
+                    f"    existing ({existing_mask.sum()}): "
+                    f"lower=[{lb_ex.min():.1f}, {lb_ex.max():.1f}], "
+                    f"upper=[{ub_ex.min():.1f}, {ub_ex.max():.1f}]"
+                )
 
     # Capture initial (pre-optimization) capacities for plotting
     initial_parameters = {}
     for param_name, (device_idx, attr_name) in parameter_names.items():
         cap = getattr(sampler.base_devices[device_idx], attr_name)
         initial_parameters[param_name] = cap.tolist() if hasattr(cap, "tolist") else cap
+
+    # Capture carrier labels for each parameter so plots don't need the network file
+    carrier_labels = {}
+    for param_name, (device_idx, attr_name) in parameter_names.items():
+        dev = sampler.base_devices[device_idx]
+        if hasattr(dev, "fuel_type"):
+            carrier_labels[param_name] = dev.fuel_type.reshape(-1).tolist()
+        elif hasattr(dev, "name") and hasattr(dev.name, "tolist"):
+            carrier_labels[param_name] = dev.name.tolist()
+    if carrier_labels:
+        logger.info(f"Saved carrier labels for: {list(carrier_labels.keys())}")
 
     # -------------------------------------------------------------------------
     # Step 5: Create StochasticPlanningProblem
@@ -848,6 +898,9 @@ def run_experiment(config: dict) -> dict:
     initial_state_source = optimizer_config.get("initial_state", "relaxation")
     batch_size = optimizer_config.get("batch_size", 0)
     batch_strategy = optimizer_config.get("batch_strategy", "sequential")
+    init_full_loss = optimizer_config.get("init_full_loss", True)
+    peak_net_load_k = optimizer_config.get("peak_net_load_k", None)
+    peak_net_load_rerank_every = optimizer_config.get("peak_net_load_rerank_every", 1)
 
     logger.info("Solving with gradient descent...")
     logger.info(f"  num_iterations: {num_iterations}")
@@ -855,6 +908,9 @@ def run_experiment(config: dict) -> dict:
     logger.info(f"  clip: {clip}")
     logger.info(f"  batch_size: {batch_size}")
     logger.info(f"  batch_strategy: {batch_strategy}")
+    if peak_net_load_k is not None:
+        logger.info(f"  peak_net_load_k: {peak_net_load_k}")
+        logger.info(f"  peak_net_load_rerank_every: {peak_net_load_rerank_every}")
 
     # Initialize from relaxation or from scratch
     if initial_state_source == "relaxation" and relaxation_result is not None:
@@ -902,6 +958,9 @@ def run_experiment(config: dict) -> dict:
             log_wandb_every=log_wandb_every,
             extra_wandb_trackers=extra_wandb_trackers,
             verbosity=1,
+            init_full_loss=init_full_loss,
+            peak_net_load_k=peak_net_load_k,
+            peak_net_load_rerank_every=peak_net_load_rerank_every,
         )
 
         solve_time = time.time() - start_time
@@ -974,6 +1033,10 @@ def run_experiment(config: dict) -> dict:
                 log_wandb_every=log_wandb_every,
                 extra_wandb_trackers=extra_wandb_trackers,
                 verbosity=1,
+                init_full_loss=init_full_loss,
+                peak_net_load_k=peak_net_load_k,
+                peak_net_load_fill=peak_net_load_fill,
+                peak_net_load_rerank_every=peak_net_load_rerank_every,
             )
 
             outer_histories.append(_serialize_history(history))
@@ -1036,17 +1099,21 @@ def run_experiment(config: dict) -> dict:
     # -------------------------------------------------------------------------
     # Step 9: Extract results
     # -------------------------------------------------------------------------
-    # Evaluate final cost
-    final_cost = problem.forward(**optimal_params)
+    eval_final_full_loss = config.get("eval_final_full_loss", False)
+
+    if eval_final_full_loss:
+        final_cost = float(problem.forward(**optimal_params))
+    else:
+        final_cost = float(history["loss"][-1])
 
     logger.info("=" * 60)
     logger.info("RESULTS")
     logger.info("=" * 60)
-    logger.info(f"Final cost: {final_cost:.2f}")
+    logger.info(f"Final cost{'' if eval_final_full_loss else ' (last batch)'}: {final_cost:.2f}")
     if relaxation_result:
         logger.info(f"Lower bound: {relaxation_result['lower_bound']:.2f}")
         logger.info(
-            f"Optimality gap: {(final_cost - relaxation_result['lower_bound']) / relaxation_result['lower_bound'] * 100:.2f}%"
+            f"Optimality gap (approx): {(final_cost - relaxation_result['lower_bound']) / relaxation_result['lower_bound'] * 100:.2f}%"
         )
     logger.info("Optimal capacities:")
     for name, value in optimal_params.items():
@@ -1103,6 +1170,7 @@ def run_experiment(config: dict) -> dict:
         "final_cost": float(final_cost),
         "lower_bound": float(relaxation_result["lower_bound"]) if relaxation_result else None,
         "initial_parameters": initial_parameters,
+        "carrier_labels": carrier_labels,
         "optimal_parameters": {
             k: v.tolist() if hasattr(v, "tolist") else v for k, v in optimal_params.items()
         },

@@ -411,11 +411,6 @@ def parse_storage_units(
             non_ext_storage_mask, "p_nom"
         ]
 
-    # For extendable storage units: keep existing p_nom as initial capacity
-    # Investment cost will be calculated as capital_cost * (capacity - p_nom_min)
-    net.storage_units.index[net.storage_units.p_nom_extendable & active_storage_mask]
-    # Note: We keep p_nom as-is to preserve existing capacity
-
     # Set SOC set-points
     initial_soc = (
         storage_units.state_of_charge_initial
@@ -435,6 +430,8 @@ def parse_storage_units(
         capital_cost=storage_units.capital_cost.values,
         initial_soc=initial_soc.values,
         final_soc=final_soc.values,
+        min_power_capacity=storage_units.p_nom_min.values,
+        max_power_capacity=storage_units.p_nom_max.values,
     )
 
 

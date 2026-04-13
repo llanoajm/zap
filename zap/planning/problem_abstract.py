@@ -155,6 +155,8 @@ class AbstractPlanningProblem:
         batch_strategy="sequential",
         verbosity=10,
         init_full_loss=True,
+        peak_net_load_k=None,
+        peak_net_load_rerank_every=1,
     ):
         if algorithm is None:
             algorithm = GradientDescent()
@@ -166,7 +168,15 @@ class AbstractPlanningProblem:
             batch_size = self.num_subproblems
 
         assert all([t in TRACKER_MAPS for t in trackers])
-        assert batch_strategy in ["sequential", "fixed"]
+
+        # If peak_net_load_k is set, batch_strategy controls fill behavior
+        if peak_net_load_k is not None:
+            _peak_fill_strategy = batch_strategy  # "sequential", "random", "none"
+            batch_strategy = "peak_net_load"
+        else:
+            _peak_fill_strategy = None
+
+        assert batch_strategy in ["sequential", "fixed", "random", "peak_net_load"]
 
         self.start_time = time.time()
         self.lower_bound = lower_bound
@@ -175,7 +185,44 @@ class AbstractPlanningProblem:
         # Setup initial state and history
         state = self.initialize_parameters(deepcopy(initial_state))
         history = self.initialize_history(trackers)
-        batch = list(range(batch_size))
+
+        # RNG for random batch strategy (standalone or as peak_net_load fill)
+        _batch_rng = np.random.default_rng(42)
+
+        # Peak net load initialization
+        if batch_strategy == "peak_net_load":
+            assert peak_net_load_k is not None, (
+                "peak_net_load_k must be set when batch_strategy='peak_net_load'"
+            )
+            assert peak_net_load_k <= self.num_subproblems, (
+                f"peak_net_load_k ({peak_net_load_k}) exceeds "
+                f"num_subproblems ({self.num_subproblems})"
+            )
+            _renewable_mask = None
+            _last_rerank_iter = -peak_net_load_rerank_every  # force initial ranking
+            if peak_net_load_rerank_every == 0:
+                # 0 means once per epoch
+                peak_net_load_rerank_every = max(
+                    1, self.num_subproblems // batch_size
+                )
+
+            # Initial ranking
+            scores, _renewable_mask = compute_peak_net_loads(
+                self.subproblems, state, _renewable_mask
+            )
+            _cached_top_k = np.argsort(scores)[-peak_net_load_k:]
+            _last_rerank_iter = 0
+
+            batch = build_peak_net_load_batch(
+                _cached_top_k, batch_size, self.num_subproblems,
+                _peak_fill_strategy, list(range(batch_size)), _batch_rng,
+            )
+        elif batch_strategy == "random":
+            batch = sorted(_batch_rng.choice(
+                self.num_subproblems, size=batch_size, replace=False
+            ).tolist())
+        else:
+            batch = list(range(batch_size))
 
         # Run full forward pass to initialize everything
         # TODO - We evaluate the full loss twice :/
@@ -219,6 +266,22 @@ class AbstractPlanningProblem:
             # Update batch and loss
             if batch_strategy == "sequential":
                 batch = get_next_batch(batch, batch_size, self.num_subproblems)
+            elif batch_strategy == "random":
+                batch = sorted(_batch_rng.choice(
+                    self.num_subproblems, size=batch_size, replace=False
+                ).tolist())
+            elif batch_strategy == "peak_net_load":
+                # Check if rerank is due
+                if (self.iteration - _last_rerank_iter) >= peak_net_load_rerank_every:
+                    scores, _renewable_mask = compute_peak_net_loads(
+                        self.subproblems, state, _renewable_mask
+                    )
+                    _cached_top_k = np.argsort(scores)[-peak_net_load_k:]
+                    _last_rerank_iter = self.iteration
+                batch = build_peak_net_load_batch(
+                    _cached_top_k, batch_size, self.num_subproblems,
+                    _peak_fill_strategy, batch, _batch_rng,
+                )
             else:  # fixed
                 batch = batch
 
@@ -433,7 +496,13 @@ class StochasticPlanningProblem(AbstractPlanningProblem):
         self.batch = batch
 
         if self.num_workers == 1:
-            sub_costs = [self.subproblems[b].forward(requires_grad, **kwargs) for b in batch]
+            sub_costs = []
+            for _idx, b in enumerate(batch):
+                _t0 = time.time()
+                sub_costs.append(self.subproblems[b].forward(requires_grad, **kwargs))
+                _dt = time.time() - _t0
+                if _dt > 1.0 or _idx == 0 or _idx == len(batch) - 1:
+                    print(f"  [fwd] sub {b} ({_idx+1}/{len(batch)}): {_dt:.2f}s")
         else:
             # Developer Note
             # Normally, multi-threading doesn't gain any performance in Python because of the GIL.
@@ -451,7 +520,13 @@ class StochasticPlanningProblem(AbstractPlanningProblem):
         batch = self.batch
 
         if self.num_workers == 1:
-            grads = [self.subproblems[b].backward() for b in batch]
+            grads = []
+            for _idx, b in enumerate(batch):
+                _t0 = time.time()
+                grads.append(self.subproblems[b].backward())
+                _dt = time.time() - _t0
+                if _dt > 1.0 or _idx == 0 or _idx == len(batch) - 1:
+                    print(f"  [bwd] sub {b} ({_idx+1}/{len(batch)}): {_dt:.2f}s")
         else:
             grads = self.pool.map(lambda b: self.subproblems[b].backward(), batch)
             grads = list(grads)
@@ -470,3 +545,130 @@ class StochasticPlanningProblem(AbstractPlanningProblem):
 def get_next_batch(batch, batch_size, num_subproblems):
     last_index = batch[-1]
     return [(last_index + 1 + i) % num_subproblems for i in range(batch_size)]
+
+
+def compute_peak_net_loads(subproblems, state, renewable_mask=None):
+    """Compute peak net load score for each subproblem.
+
+    For each subproblem (block), computes max_t(total_load[t] - renewable_available[t])
+    where renewable_available uses the current investment capacities from state.
+
+    Parameters
+    ----------
+    subproblems : list[AbstractPlanningProblem]
+        The list of subproblems (one per block).
+    state : dict
+        Current investment parameters, e.g. {"generator_capacity": array}.
+    renewable_mask : np.ndarray or None
+        Boolean mask over generators identifying renewables. If None, computed
+        from fuel_type and cached for reuse.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        (scores, renewable_mask) — scores has shape (num_subproblems,),
+        renewable_mask is a boolean array of shape (num_generators,).
+    """
+    RENEWABLE_FUELS = {"solar", "onwind", "offwind", "offwind_floating"}
+
+    # Build renewable mask from fuel_type (same across all subproblems)
+    if renewable_mask is None:
+        gen_device = subproblems[0].layer.devices[0]
+        fuel_types = np.asarray(gen_device.fuel_type).reshape(-1)
+        renewable_mask = np.isin(fuel_types, list(RENEWABLE_FUELS))
+
+    # Get current generator capacities from state
+    gen_cap = state.get("generator_capacity", None)
+    if gen_cap is None:
+        # Fallback to device nominal_capacity
+        gen_cap = subproblems[0].layer.devices[0].nominal_capacity
+
+    # Convert to numpy if torch tensor
+    if hasattr(gen_cap, "detach"):
+        gen_cap = gen_cap.detach().cpu().numpy()
+    gen_cap = np.asarray(gen_cap).reshape(-1)
+
+    scores = np.empty(len(subproblems))
+    for i, sub in enumerate(subproblems):
+        # Load: shape (num_loads, block_hours)
+        load_data = sub.layer.devices[1].load
+        if hasattr(load_data, "detach"):
+            load_data = load_data.detach().cpu().numpy()
+        load_data = np.asarray(load_data)
+        total_load = load_data.sum(axis=0)  # (block_hours,)
+
+        # Generator capacity factors: shape (num_gens, block_hours)
+        dyn_cap = sub.layer.devices[0].dynamic_capacity
+        if hasattr(dyn_cap, "detach"):
+            dyn_cap = dyn_cap.detach().cpu().numpy()
+        dyn_cap = np.asarray(dyn_cap)
+
+        # Renewable available = cf * capacity for renewable generators
+        renewable_available = (
+            dyn_cap[renewable_mask, :] * gen_cap[renewable_mask, np.newaxis]
+        ).sum(axis=0)  # (block_hours,)
+
+        net_load = total_load - renewable_available
+        scores[i] = net_load.max()
+
+    return scores, renewable_mask
+
+
+def build_peak_net_load_batch(
+    top_k_indices, batch_size, num_subproblems, fill_strategy, current_batch, rng
+):
+    """Assemble a batch with top-K peak net load blocks plus fill slots.
+
+    Parameters
+    ----------
+    top_k_indices : np.ndarray
+        Indices of the top-K highest net-load subproblems.
+    batch_size : int
+        Total batch size.
+    num_subproblems : int
+        Total number of subproblems.
+    fill_strategy : str
+        "sequential", "random", or "none".
+    current_batch : list[int]
+        The current batch (used for sequential fill to track position).
+    rng : np.random.Generator
+        Random number generator for "random" fill.
+
+    Returns
+    -------
+    list[int]
+        Batch indices of length min(batch_size, num_subproblems).
+    """
+    top_k_set = set(top_k_indices.tolist())
+    k = len(top_k_set)
+
+    if fill_strategy in ("none", "fixed") or batch_size <= k:
+        return sorted(top_k_set)[:batch_size]
+
+    fill_count = batch_size - k
+    remaining = [i for i in range(num_subproblems) if i not in top_k_set]
+
+    if len(remaining) == 0:
+        return sorted(top_k_set)
+
+    if fill_strategy == "random":
+        fill_count = min(fill_count, len(remaining))
+        fill_indices = rng.choice(remaining, size=fill_count, replace=False).tolist()
+
+    elif fill_strategy == "sequential":
+        # Continue from the last position in the current batch
+        last_pos = current_batch[-1] if current_batch else -1
+        fill_indices = []
+        cursor = last_pos + 1
+        while len(fill_indices) < fill_count:
+            idx = cursor % num_subproblems
+            if idx not in top_k_set:
+                fill_indices.append(idx)
+            cursor += 1
+            # Safety: if we've wrapped around fully, stop
+            if cursor - (last_pos + 1) >= num_subproblems:
+                break
+    else:
+        raise ValueError(f"Unknown peak_net_load fill strategy: {fill_strategy}")
+
+    return sorted(list(top_k_set) + fill_indices)

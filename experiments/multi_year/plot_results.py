@@ -52,11 +52,54 @@ CARRIER_COLORS: Dict[str, str] = {
 
 _TAB20 = matplotlib.colormaps["tab20"]
 
+# Map fine-grained carriers to aggregate type groups
+CARRIER_GROUPS: Dict[str, str] = {
+    "nuclear": "Nuclear",
+    "coal": "Coal",
+    "CCGT": "Gas",
+    "OCGT": "Gas",
+    "CCGT-95CCS": "Gas CCS",
+    "hydro": "Hydro",
+    "geothermal": "Geo",
+    "onwind": "Wind",
+    "offwind": "Wind",
+    "offwind_floating": "Wind",
+    "solar": "Solar",
+    "biomass": "Biomass",
+    "oil": "Oil",
+    "hydrogen_ct": "H2 CT",
+    "battery": "Battery",
+    "H2": "H2 Storage",
+}
+
+GROUP_COLORS: Dict[str, str] = {
+    "Solar": "#f0ad4e",
+    "Wind": "#5cb85c",
+    "Gas": "#e67e22",
+    "Gas CCS": "#e74c3c",
+    "Coal": "#7f8c8d",
+    "Nuclear": "#9b59b6",
+    "Hydro": "#3498db",
+    "Geo": "#8b4513",
+    "Biomass": "#27ae60",
+    "Oil": "#2c3e50",
+    "H2 CT": "#1abc9c",
+    "Battery": "#3498db",
+    "H2 Storage": "#16a085",
+}
+
 
 def _color(carrier: str, idx: int = 0) -> str:
+    if carrier in GROUP_COLORS:
+        return GROUP_COLORS[carrier]
     if carrier in CARRIER_COLORS:
         return CARRIER_COLORS[carrier]
     return _TAB20(idx % 20)
+
+
+def _group_carrier(carrier: str) -> str:
+    """Map a fine-grained carrier name to its aggregate group."""
+    return CARRIER_GROUPS.get(carrier, carrier)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +162,34 @@ def load_carrier_map(network_path: Path) -> Dict[str, List[str]]:
 def _flatten_param_values(values) -> np.ndarray:
     """Convert nested list-of-lists [[v1], [v2], ...] to flat numpy array."""
     return np.array(values).flatten()
+
+
+def _get_carriers(
+    results: dict,
+    param_key: str,
+    carrier_map: Optional[Dict[str, List[str]]],
+    carrier_map_key: str,
+    n_expected: int,
+) -> List[str]:
+    """Resolve carrier labels for a parameter, with grouped names.
+
+    Priority:
+      1. ``results["carrier_labels"][param_key]`` (embedded by runner.py)
+      2. ``carrier_map[carrier_map_key]`` (loaded from network file)
+      3. Generic fallback labels
+    """
+    # Try embedded labels first
+    embedded = results.get("carrier_labels", {}).get(param_key)
+    if embedded is not None and len(embedded) == n_expected:
+        return [_group_carrier(c) for c in embedded]
+
+    # Try network-derived carrier map
+    if carrier_map is not None:
+        labels = carrier_map.get(carrier_map_key, [])
+        if len(labels) == n_expected:
+            return [_group_carrier(c) for c in labels]
+
+    return [f"{param_key}_{i}" for i in range(n_expected)]
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +297,9 @@ def plot_final_capacities(
     gen_caps = optimal.get("generator_capacity")
     if gen_caps is not None:
         caps_mw = _flatten_param_values(gen_caps) * power_unit
-        carriers = (
-            carrier_map["generators"]
-            if carrier_map and len(carrier_map.get("generators", [])) == len(caps_mw)
-            else [f"gen_{i}" for i in range(len(caps_mw))]
-        )
+        carriers = _get_carriers(results, "generator_capacity", carrier_map, "generators", len(caps_mw))
 
-        # Aggregate by carrier
+        # Aggregate by carrier group
         carrier_totals: Dict[str, float] = {}
         for cap, carrier in zip(caps_mw, carriers):
             carrier_totals[carrier] = carrier_totals.get(carrier, 0.0) + cap
@@ -267,11 +334,7 @@ def plot_final_capacities(
     su_caps = optimal.get("storageunit_power")
     if su_caps is not None:
         su_mw = _flatten_param_values(su_caps) * power_unit
-        su_carriers = (
-            carrier_map["storage_units"]
-            if carrier_map and len(carrier_map.get("storage_units", [])) == len(su_mw)
-            else [f"su_{i}" for i in range(len(su_mw))]
-        )
+        su_carriers = _get_carriers(results, "storageunit_power", carrier_map, "storage_units", len(su_mw))
 
         su_totals: Dict[str, float] = {}
         for cap, carrier in zip(su_mw, su_carriers):
@@ -345,7 +408,6 @@ def plot_capacity_trajectory(
     iters = np.arange(n_iters)
 
     # ---- Generator trajectories ----
-    gen_carriers = carrier_map.get("generators") if carrier_map else None
     has_gen_trajectory = "generator_capacity" in param_history[0]
 
     if has_gen_trajectory:
@@ -356,14 +418,10 @@ def plot_capacity_trajectory(
             all_gen_caps.append(caps)
         all_gen_caps = np.array(all_gen_caps)  # (n_iters, n_generators)
 
-        # Assign carriers
         n_gens = all_gen_caps.shape[1]
-        if gen_carriers and len(gen_carriers) == n_gens:
-            carriers = gen_carriers
-        else:
-            carriers = [f"gen_{i}" for i in range(n_gens)]
+        carriers = _get_carriers(results, "generator_capacity", carrier_map, "generators", n_gens)
 
-        # Aggregate by carrier at each iteration
+        # Aggregate by carrier group at each iteration
         unique_carriers = sorted(set(carriers))
         carrier_trajectories: Dict[str, np.ndarray] = {}
         for c in unique_carriers:
@@ -394,7 +452,6 @@ def plot_capacity_trajectory(
         print(f"  Saved: {out_path}", flush=True)
 
     # ---- Storage trajectory ----
-    su_carriers = carrier_map.get("storage_units") if carrier_map else None
     has_su_trajectory = "storageunit_power" in param_history[0]
 
     if has_su_trajectory:
@@ -405,10 +462,7 @@ def plot_capacity_trajectory(
         all_su_caps = np.array(all_su_caps)
 
         n_su = all_su_caps.shape[1]
-        if su_carriers and len(su_carriers) == n_su:
-            su_labels = su_carriers
-        else:
-            su_labels = [f"su_{i}" for i in range(n_su)]
+        su_labels = _get_carriers(results, "storageunit_power", carrier_map, "storage_units", n_su)
 
         unique_su = sorted(set(su_labels))
         su_trajectories: Dict[str, np.ndarray] = {}
@@ -532,21 +586,16 @@ def plot_initial_vs_final_capacities(
     fig, axes = plt.subplots(1, 3, figsize=(16, 6), gridspec_kw={"width_ratios": [3, 1, 1]})
     bar_width = 0.35
 
-    # --- Generators by carrier ---
+    # --- Generators by carrier group ---
     ax = axes[0]
     gen_init = initial.get("generator_capacity")
     gen_opt = optimal.get("generator_capacity")
     if gen_init is not None and gen_opt is not None:
         init_mw = _flatten_param_values(gen_init) * power_unit
         opt_mw = _flatten_param_values(gen_opt) * power_unit
+        carriers = _get_carriers(results, "generator_capacity", carrier_map, "generators", len(opt_mw))
 
-        carriers = (
-            carrier_map["generators"]
-            if carrier_map and len(carrier_map.get("generators", [])) == len(opt_mw)
-            else [f"gen_{i}" for i in range(len(opt_mw))]
-        )
-
-        # Aggregate by carrier
+        # Aggregate by carrier group
         init_totals: Dict[str, float] = {}
         opt_totals: Dict[str, float] = {}
         for ic, oc, carrier in zip(init_mw, opt_mw, carriers):
@@ -590,11 +639,7 @@ def plot_initial_vs_final_capacities(
     if su_init is not None and su_opt is not None:
         init_mw = _flatten_param_values(su_init) * power_unit
         opt_mw = _flatten_param_values(su_opt) * power_unit
-        su_carriers = (
-            carrier_map["storage_units"]
-            if carrier_map and len(carrier_map.get("storage_units", [])) == len(opt_mw)
-            else [f"su_{i}" for i in range(len(opt_mw))]
-        )
+        su_carriers = _get_carriers(results, "storageunit_power", carrier_map, "storage_units", len(opt_mw))
 
         su_init_totals: Dict[str, float] = {}
         su_opt_totals: Dict[str, float] = {}
@@ -695,7 +740,7 @@ def main() -> None:
         print(f"ERROR: File not found: {args.results_json}", flush=True)
         sys.exit(1)
 
-    output_dir = args.output_dir or args.results_json.parent
+    output_dir = args.output_dir or args.results_json.parent / "plots"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60, flush=True)

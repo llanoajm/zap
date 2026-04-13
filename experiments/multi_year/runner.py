@@ -367,31 +367,33 @@ def export_solved_network(
             # Update generators p_nom_opt
             for i, name in enumerate(device_names):
                 if name in network.generators.index:
-                    network.generators.loc[name, "p_nom_opt"] = param_array_scaled[i]
-                    logger.info(f"  Generator '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW")
+                    value = float(param_array_scaled[i])
+                    network.generators.loc[name, "p_nom_opt"] = value
+                    logger.info(f"  Generator '{name}': p_nom_opt = {value:.2f} MW")
 
         elif isinstance(device, StorageUnit):
             # Update storage_units p_nom_opt
             for i, name in enumerate(device_names):
                 if name in network.storage_units.index:
-                    network.storage_units.loc[name, "p_nom_opt"] = param_array_scaled[i]
-                    logger.info(
-                        f"  StorageUnit '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW"
-                    )
+                    value = float(param_array_scaled[i])
+                    network.storage_units.loc[name, "p_nom_opt"] = value
+                    logger.info(f"  StorageUnit '{name}': p_nom_opt = {value:.2f} MW")
 
         elif isinstance(device, DCLine):
             # Update links p_nom_opt
             for i, name in enumerate(device_names):
                 if name in network.links.index:
-                    network.links.loc[name, "p_nom_opt"] = param_array_scaled[i]
-                    logger.info(f"  Link '{name}': p_nom_opt = {param_array_scaled[i]:.2f} MW")
+                    value = float(param_array_scaled[i])
+                    network.links.loc[name, "p_nom_opt"] = value
+                    logger.info(f"  Link '{name}': p_nom_opt = {value:.2f} MW")
 
         elif isinstance(device, ACLine):
             # Update lines s_nom_opt
             for i, name in enumerate(device_names):
                 if name in network.lines.index:
-                    network.lines.loc[name, "s_nom_opt"] = param_array_scaled[i]
-                    logger.info(f"  Line '{name}': s_nom_opt = {param_array_scaled[i]:.2f} MVA")
+                    value = float(param_array_scaled[i])
+                    network.lines.loc[name, "s_nom_opt"] = value
+                    logger.info(f"  Line '{name}': s_nom_opt = {value:.2f} MVA")
 
     logger.info("=" * 60)
     return network

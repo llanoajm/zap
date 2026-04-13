@@ -40,7 +40,7 @@ relaxation:
 
 # Gradient descent optimizer settings
 optimizer:
-  num_iterations: 40  # Number of gradient descent iterations
+  num_iterations: 10  # Number of gradient descent iterations
   step_size: 0.001  # Learning rate
   clip: 1000.0  # Gradient clipping threshold
   initial_state: initial  # 'relaxation' or 'initial'
@@ -52,4 +52,4 @@ optimizer:
 # for generators, storage_units, and links (s_nom_opt for lines) to reflect
 # the optimized capacities from the planning problem
 export:
-  should_export: false  # Set to true to export optimized network
+  should_export: true  # Set to true to export optimized network

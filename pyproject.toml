@@ -20,7 +20,6 @@ sparse-dot-mkl = {version = "^0.9.6", optional = true}
 attrs = "^24.2.0"
 ipykernel = "^6.29.5"
 pre-commit = "^4.2.0"
-logging = "^0.4.9.6"
 marimo = "^0.11.21"
 cvxpy = "1.7.1"
 ortools = "9.11.4210"
@@ -28,6 +27,7 @@ scikit-sparse = { version = "^0.4.16", optional = true }
 h5py = "^3.14.0"
 linopy = "0.3.14"
 xarray = "2024.9.0"
+pyproj = "3.7.1"
 
 [tool.poetry.extras]
 pypsa = ["pypsa"]

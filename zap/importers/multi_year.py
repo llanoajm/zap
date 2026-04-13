@@ -120,16 +120,13 @@ class MultiYearBlockSampler:
         snapshots_list : list[pd.DatetimeIndex]
             Snapshots for each network
         """
-        # Build name -> device index mapping for base devices
-        # Note: device names may be pandas Index objects, so convert to tuple for hashing
-        device_name_to_idx = {}
+        # Build type -> device index mapping for base devices
+        # Match by device type (Generator, Load, etc.) rather than full name tuple,
+        # since name ordering can differ across weather-year networks.
+        device_type_to_idx = {}
         for idx, dev in enumerate(self.base_devices):
-            if hasattr(dev, "name"):
-                name = dev.name
-                # Handle pandas Index by converting to tuple
-                if hasattr(name, "tolist"):
-                    name = tuple(name.tolist())
-                device_name_to_idx[name] = idx
+            dev_type = type(dev).__name__
+            device_type_to_idx[dev_type] = idx
 
         # Process each subsequent network
         for net_idx, net in enumerate(networks[1:], start=1):
@@ -138,24 +135,21 @@ class MultiYearBlockSampler:
             # Load this network's devices to get timeseries
             _, year_devices = load_pypsa_network(net, snapshots=snapshots, **self._load_kwargs)
 
-            # Match and concatenate timeseries by device name
+            # Match and concatenate timeseries by device type
             for year_dev in year_devices:
-                dev_name = getattr(year_dev, "name", None)
-                if dev_name is None:
-                    continue
+                dev_type = type(year_dev).__name__
 
-                # Handle pandas Index by converting to tuple
-                if hasattr(dev_name, "tolist"):
-                    dev_name = tuple(dev_name.tolist())
-
-                if dev_name not in device_name_to_idx:
+                if dev_type not in device_type_to_idx:
                     logger.warning(
-                        f"Device '{dev_name}' in year {net_idx} not found in base network, skipping"
+                        f"Device type '{dev_type}' in year {net_idx} not found in base network, skipping"
                     )
                     continue
 
-                base_idx = device_name_to_idx[dev_name]
+                base_idx = device_type_to_idx[dev_type]
                 base_dev = self.base_devices[base_idx]
+
+                # Compute reorder index if individual device names differ in order
+                reorder_idx = self._get_reorder_index(base_dev, year_dev, net_idx, dev_type)
 
                 # Concatenate each time-varying attribute
                 for attr in TIME_VARYING_ATTRS.get(type(base_dev), []):
@@ -168,6 +162,10 @@ class MultiYearBlockSampler:
                     # Only concatenate if 2D (num_devices, time) AND actually time-varying
                     # An attribute is time-varying if shape[1] matches the year's time horizon
                     if base_arr.ndim == 2 and year_arr.ndim == 2:
+                        # Apply reordering to align device axis if needed
+                        if reorder_idx is not None:
+                            year_arr = year_arr[reorder_idx]
+
                         base_time_dim = base_arr.shape[1]
                         year_time_dim = year_arr.shape[1]
                         expected_base_hours = self.year_boundaries[net_idx]
@@ -183,6 +181,54 @@ class MultiYearBlockSampler:
                             setattr(base_dev, attr, combined)
 
             logger.debug(f"Concatenated timeseries from year {net_idx}")
+
+    @staticmethod
+    def _get_reorder_index(base_dev, year_dev, net_idx, dev_type):
+        """Compute reorder index to align year device names to base device order.
+
+        Returns None if names already match in order, or an integer array of
+        indices that reorders year_dev rows to match base_dev ordering.
+        """
+        base_names = getattr(base_dev, "name", None)
+        year_names = getattr(year_dev, "name", None)
+
+        if base_names is None or year_names is None:
+            return None
+
+        # Convert to pandas Index for comparison
+        if not isinstance(base_names, pd.Index):
+            base_names = pd.Index(base_names)
+        if not isinstance(year_names, pd.Index):
+            year_names = pd.Index(year_names)
+
+        # If names match exactly in order, no reordering needed
+        if base_names.equals(year_names):
+            return None
+
+        # If same names but different order, compute reorder index
+        if len(base_names) == len(year_names) and set(base_names) == set(year_names):
+            reorder_idx = year_names.get_indexer(base_names)
+            if (reorder_idx == -1).any():
+                logger.warning(
+                    f"{dev_type} in year {net_idx}: name reindexing failed for some devices"
+                )
+                return None
+            logger.info(
+                f"{dev_type} in year {net_idx}: reordering {len(base_names)} devices to match base network"
+            )
+            return reorder_idx
+
+        # Names are truly different — warn but proceed with direct concatenation
+        base_set = set(base_names)
+        year_set = set(year_names)
+        missing = base_set - year_set
+        extra = year_set - base_set
+        logger.warning(
+            f"{dev_type} in year {net_idx}: device name mismatch. "
+            f"{len(missing)} in base but not year, {len(extra)} in year but not base. "
+            f"Proceeding with direct concatenation (assuming corresponding order)."
+        )
+        return None
 
     def sample_blocks(
         self,

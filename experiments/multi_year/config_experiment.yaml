@@ -1,0 +1,80 @@
+# Two-year stochastic capacity planning run
+# Networks from gradient_ra_dataprep (WY 2010, 2011) on the ERM-1h 50-bus WECC base
+# python experiments/multi_year/runner.py experiments/multi_year/config_experiment.yaml 
+name: multi_year_experiment
+
+network_files:
+  - 2011_raw_network.nc
+  - 2012_raw_network.nc
+
+# Emissions penalty ($/ton CO2). Set to 0 to disable.
+# emissions_weight: 200.0
+emissions_weight: 0.0
+
+# Adaptive emissions targeting (dual ascent). Overrides emissions_weight when enabled.
+# emissions_target:
+#   enabled: true
+#   target: 50000.0
+#   initial_weight: 0.0
+#   dual_step_size: 1.0
+#   max_weight: 1000.0
+#   num_outer_iterations: 10
+#   tolerance: 0.05
+
+
+# Block sampling: weekly blocks, use all of them
+block_size: 48
+sampling_strategy: all
+seed: 42
+
+# Solvers
+num_workers: 32                 # match --cpus-per-task in sbatch
+dispatch_solver: GUROBI
+dispatch_solver_kwargs:
+  verbose: false
+  Method: 2                     # barrier/IPM — fastest for large LPs
+  Crossover: 0                  # skip crossover (don't need vertex solution)
+  BarConvTol: 1.0e-8
+  Threads: 1                    # parallelism lives at the num_workers level
+  OutputFlag: 0
+
+pypsa_args:
+  power_unit: 1000.0
+  cost_unit: 1.0
+
+
+optimizer:
+  num_iterations: 30
+  step_size: 0.01
+  clip: 5000
+  initial_state: relaxation     # start from LP relaxation solution
+  batch_size: 32                # match num_workers so no threads sit idle
+  batch_strategy: sequential
+  track_full_loss_every: 10
+
+
+# Weights & Biases logging
+wandb:
+  enabled: true
+  project: zap-multiyear        # wandb project name
+  run_name: null                # auto-generated from experiment name if null
+  tags: [multi_year, 2yr]
+  log_every: 1                  # log every N iterations
+
+# Export the solved network so gradient_ra can pick it up
+export:
+  should_export: true
+
+
+# Warm-start from the convex LP relaxation (recommended for this size)
+relaxation:
+  should_solve: false
+  price_bound: 100.0
+  num_subproblems: 3          # subsample relaxation blocks (null = use all)
+  solver: GUROBI
+  solver_kwargs:
+    verbose: false
+    Method: -1
+    Crossover: 0
+    BarConvTol: 1.0e-4
+    Threads: 16

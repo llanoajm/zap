@@ -11,11 +11,17 @@ Example usage:
 import numpy as np
 import pandas as pd
 import cvxpy as cp
+import torch
 import pypsa
 import yaml
 import json
 import logging
 import time
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 from pathlib import Path
 from typing import Union, List
@@ -29,10 +35,13 @@ from zap.planning import (
     RelaxedPlanningProblem,
     GradientDescent,
 )
-from zap.planning.operation_objectives import DispatchCostObjective
+from zap.planning.operation_objectives import DispatchCostObjective, EmissionsObjective
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+import warnings
+warnings.filterwarnings("ignore", message="datetime.datetime.utcnow", category=DeprecationWarning)
 
 
 # ============================================================================
@@ -199,6 +208,87 @@ def setup_parameter_names(devices: list) -> dict[str, tuple[int, str]]:
     return parameter_names
 
 
+def setup_bounds(
+    devices: list,
+    parameter_names: dict[str, tuple[int, str]],
+    power_unit: float = 1.0,
+    min_capacity_floor_mw: float = 0.1,
+    min_storage_floor_mw: float = 10.0,
+) -> tuple[dict, dict]:
+    """
+    Build explicit lower/upper bounds for planning parameters.
+
+    Mirrors the bounds logic in development/19_benchmarking.py to prevent
+    dispatch infeasibility from zero-capacity devices.
+
+    Parameters
+    ----------
+    devices : list
+        List of ZAP device objects (already scaled by power_unit).
+    parameter_names : dict
+        Maps parameter name -> (device_index, attribute_name).
+    power_unit : float
+        The power_unit used when importing the network. Floors specified
+        in MW are divided by this to match device units.
+    min_capacity_floor_mw : float
+        Minimum capacity in MW for all devices.
+    min_storage_floor_mw : float
+        Higher minimum in MW for storage to avoid SOC infeasibility.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        (lower_bounds, upper_bounds) dicts keyed by parameter name.
+    """
+    from zap.devices.storage_unit import StorageUnit
+
+    # Convert MW floors to device units
+    min_capacity_floor = min_capacity_floor_mw / power_unit
+    min_storage_floor = min_storage_floor_mw / power_unit
+
+    lower_bounds = {}
+    upper_bounds = {}
+
+    for param_name, (device_idx, attr_name) in parameter_names.items():
+        device = devices[device_idx]
+        current_cap = getattr(device, attr_name)
+
+        # Lower bound: use device min if available, else zeros
+        if isinstance(device, StorageUnit):
+            min_attr = "min_power_capacity"
+            max_attr = "max_power_capacity"
+        else:
+            min_attr = "min_nominal_capacity"
+            max_attr = "max_nominal_capacity"
+
+        lb = getattr(device, min_attr, None)
+        if lb is None:
+            lb = np.zeros_like(current_cap)
+        else:
+            lb = lb.copy()
+
+        # Upper bound: use device max if available, else large multiple
+        ub = getattr(device, max_attr, None)
+        if ub is None:
+            ub = (current_cap + 1000.0 / power_unit) * 10.0
+        else:
+            ub = ub.copy()
+            # Replace infinities with a reasonable cap
+            if np.any(np.isinf(ub)):
+                reasonable = (current_cap + 1000.0 / power_unit) * 10.0
+                ub = np.where(np.isinf(ub), reasonable, ub)
+
+        # Apply floors
+        lb = np.maximum(lb, min_capacity_floor)
+        if isinstance(device, StorageUnit):
+            lb = np.maximum(lb, min_storage_floor)
+
+        lower_bounds[param_name] = lb
+        upper_bounds[param_name] = ub
+
+    return lower_bounds, upper_bounds
+
+
 def export_solved_network(
     pypsa_network_path: Path,
     devices: list,
@@ -262,8 +352,8 @@ def export_solved_network(
         elif hasattr(device_names, "tolist"):
             device_names = device_names.tolist()
 
-        # Convert param_value to array
-        param_array = np.atleast_1d(param_value)
+        # Convert param_value to flat 1D array
+        param_array = np.atleast_1d(param_value).flatten()
 
         # Undo power unit scaling to get back to original units (MW)
         param_array_scaled = param_array * power_unit
@@ -307,6 +397,187 @@ def export_solved_network(
     return network
 
 
+def _serialize_history(history: dict) -> dict:
+    """Serialize optimization history for JSON output.
+
+    Handles scalar trackers (loss, grad_norm, …) as well as the ``"param"``
+    tracker whose entries are dicts mapping parameter names to numpy arrays.
+    """
+    serialized = {}
+    for key, values in history.items():
+        if key == "param":
+            # Each entry is a dict {param_name: np.ndarray}
+            serialized[key] = [
+                {
+                    pname: pval.tolist() if hasattr(pval, "tolist") else pval
+                    for pname, pval in snapshot.items()
+                }
+                for snapshot in values
+            ]
+        else:
+            serialized[key] = [
+                float(x) if isinstance(x, (int, float, np.floating)) else x
+                for x in values
+            ]
+    return serialized
+
+
+def update_operation_objectives(problem, base_network, emissions_weight):
+    """Update operation objectives on all subproblems with the given emissions weight.
+
+    Swaps the ``operation_objective`` attribute on each subproblem in-place.
+    This is cheap — it just creates Python wrapper objects without touching
+    the CVXPY dispatch layer.
+
+    Parameters
+    ----------
+    problem : StochasticPlanningProblem
+        The stochastic planning problem whose subproblems will be updated.
+    base_network : PowerNetwork
+        The base zap PowerNetwork (needed by DispatchCostObjective).
+    emissions_weight : float
+        The current Lagrangian multiplier (carbon price) for emissions.
+    """
+    for sub in problem.subproblems:
+        f_cost = DispatchCostObjective(base_network, sub.layer.devices)
+        if emissions_weight > 0:
+            f_emissions = emissions_weight * EmissionsObjective(sub.layer.devices)
+            sub.operation_objective = f_cost + f_emissions
+        else:
+            sub.operation_objective = f_cost
+
+
+def evaluate_emissions(problem, emissions_objectives, params):
+    """Evaluate total emissions across all subproblems.
+
+    Dispatches the full problem with the given parameters (no gradients),
+    then evaluates the pre-built EmissionsObjective on each subproblem's
+    dispatch state.  Emissions are weighted by subproblem weights and
+    snapshot weights so the result is consistent with the Lagrangian cost.
+
+    Parameters
+    ----------
+    problem : StochasticPlanningProblem
+        The stochastic planning problem (workers should already be initialized).
+    emissions_objectives : list[EmissionsObjective]
+        One EmissionsObjective per subproblem (pre-built, reusable).
+    params : dict
+        Current investment parameters (e.g. from ``problem.solve()``).
+
+    Returns
+    -------
+    float
+        Total weighted emissions.
+    """
+    problem.forward(requires_grad=False, **params)
+
+    total_emissions = 0.0
+    for i, (sub, eo) in enumerate(zip(problem.subproblems, emissions_objectives)):
+        emissions = eo(sub.state, parameters=sub.params, la=np)
+        total_emissions += problem.weights[i] * sub.snapshot_weight * float(emissions)
+
+    return total_emissions
+
+
+def get_wandb_trackers(problem, sampler, relaxation_result, config):
+    """Build extra wandb tracker functions for multi-year experiments.
+
+    Parameters
+    ----------
+    problem : StochasticPlanningProblem
+    sampler : MultiYearBlockSampler
+    relaxation_result : dict or None
+    config : dict
+
+    Returns
+    -------
+    dict[str, callable]
+    """
+    emissions_objectives = [
+        EmissionsObjective(sub.layer.devices) for sub in problem.subproblems
+    ]
+    cost_objectives = [
+        DispatchCostObjective(sampler.base_network, sub.layer.devices)
+        for sub in problem.subproblems
+    ]
+
+    def emissions_tracker(J, grad, params, last_state, prob):
+        # Recompute parameters from the raw state dict (numpy) to match the
+        # numpy dispatch states, avoiding torch/numpy mixing.
+        states = [sub.state for sub in prob.subproblems]
+        parameters = [sub.layer.setup_parameters(**params) for sub in prob.subproblems]
+        return sum(
+            eo(s, parameters=p)
+            for eo, s, p in zip(emissions_objectives, states, parameters)
+        )
+
+    def cost_tracker(J, grad, params, last_state, prob):
+        states = [sub.state for sub in prob.subproblems]
+        parameters = [sub.layer.setup_parameters(**params) for sub in prob.subproblems]
+        return sum(
+            co(s, parameters=p)
+            for co, s, p in zip(cost_objectives, states, parameters)
+        )
+
+    lower_bound = relaxation_result["lower_bound"] if relaxation_result else None
+
+    trackers = {
+        "emissions": emissions_tracker,
+        "fuel_costs": cost_tracker,
+        "inv_cost": lambda J, grad, params, last_state, prob: prob.inv_cost.item(),
+        "op_cost": lambda J, grad, params, last_state, prob: prob.op_cost.item(),
+        "batch": lambda J, grad, params, last_state, prob: prob.batch[0],
+        "lower_bound": lambda *args: lower_bound if lower_bound is not None else np.nan,
+    }
+
+    # Full loss tracker (evaluated once per epoch)
+    optimizer_config = config.get("optimizer", {})
+    track_full_loss_every = optimizer_config.get("track_full_loss_every", 0)
+    batch_size = optimizer_config.get("batch_size", 0)
+    num_subs = problem.num_subproblems
+
+    if batch_size == 0:
+        batch_size = num_subs
+    if track_full_loss_every == 0:
+        track_full_loss_every = max(1, int(num_subs / batch_size))
+
+    logger.info(f"Tracking full loss every {track_full_loss_every} batches.")
+
+    _full_loss_cache = {"value": np.inf}
+
+    def full_loss_tracker(J, grad, params, last_state, prob):
+        iteration = prob.iteration
+        if iteration % track_full_loss_every == 0:
+            logger.info(f"Evaluating full loss at iteration {iteration}...")
+            _full_loss_cache["value"] = prob(**params)
+        return _full_loss_cache["value"]
+
+    trackers["full_loss"] = full_loss_tracker
+
+    # Capacity-by-group trackers (GW)
+    pypsa_args = config.get("pypsa_args", {})
+    power_unit = pypsa_args.get("power_unit", 1.0)
+
+    gen_device = problem.subproblems[0].layer.devices[0]
+    fuel_types = gen_device.fuel_type.reshape(-1)
+
+    wind_mask = np.isin(fuel_types, ["onwind", "offwind", "offwind_floating"])
+    solar_mask = fuel_types == "solar"
+    thermal_mask = np.isin(fuel_types, ["CCGT", "OCGT", "coal", "oil", "nuclear", "CCGT-95CCS"])
+
+    def _gen_cap_sum(params, mask=None):
+        caps = np.asarray(params["generator_capacity"]).flatten() * power_unit / 1e3
+        if mask is not None:
+            caps = caps[mask]
+        return float(np.sum(caps))
+
+    trackers["wind_capacity_gw"] = lambda J, grad, params, *_a, _m=wind_mask: _gen_cap_sum(params, _m)
+    trackers["solar_capacity_gw"] = lambda J, grad, params, *_a, _m=solar_mask: _gen_cap_sum(params, _m)
+    trackers["thermal_capacity_gw"] = lambda J, grad, params, *_a, _m=thermal_mask: _gen_cap_sum(params, _m)
+
+    return trackers
+
+
 def run_experiment(config: dict) -> dict:
     """
     Run a multi-year stochastic planning experiment.
@@ -341,6 +612,34 @@ def run_experiment(config: dict) -> dict:
     num_workers = config.get("num_workers", 1)
     seed = config.get("seed", 42)
     pypsa_args = config.get("pypsa_args", DEFAULT_PYPSA_ARGS)
+    emissions_weight = config.get("emissions_weight", 0.0)
+    emissions_target_config = config.get("emissions_target", {})
+    adaptive_emissions = emissions_target_config.get("enabled", False)
+    if adaptive_emissions and emissions_weight > 0:
+        logger.warning(
+            "Both emissions_weight > 0 and emissions_target.enabled are set. "
+            "Adaptive emissions targeting takes precedence over emissions_weight."
+        )
+
+    # Wandb setup
+    wandb_config = config.get("wandb", {})
+    use_wandb = wandb_config.get("enabled", False)
+    log_wandb_every = wandb_config.get("log_every", 1)
+    wandb_logger = None
+
+    if use_wandb:
+        if wandb is None:
+            logger.warning("wandb not installed. Skipping wandb logging.")
+            use_wandb = False
+        else:
+            wandb.init(
+                project=wandb_config.get("project", "zap-multiyear"),
+                name=wandb_config.get("run_name", config.get("name", None)),
+                tags=wandb_config.get("tags", []),
+                config=config,
+            )
+            wandb_logger = wandb
+            logger.info(f"Wandb initialized (project={wandb_config.get('project', 'zap-multiyear')})")
 
     # -------------------------------------------------------------------------
     # Step 1: Load multi-year networks
@@ -388,10 +687,26 @@ def run_experiment(config: dict) -> dict:
     logger.info(f"Total hours covered: {len(blocks) * block_size}")
 
     # -------------------------------------------------------------------------
-    # Step 4: Setup parameter names for planning
+    # Step 4: Setup parameter names and bounds for planning
     # -------------------------------------------------------------------------
     parameter_names = setup_parameter_names(sampler.base_devices)
     logger.info(f"Planning parameters: {list(parameter_names.keys())}")
+
+    power_unit = pypsa_args.get("power_unit", 1.0)
+    lower_bounds, upper_bounds = setup_bounds(
+        sampler.base_devices, parameter_names, power_unit=power_unit
+    )
+    for p in parameter_names:
+        logger.info(
+            f"  {p}: lower=[{lower_bounds[p].min():.1f}, {lower_bounds[p].max():.1f}], "
+            f"upper=[{upper_bounds[p].min():.1f}, {upper_bounds[p].max():.1f}]"
+        )
+
+    # Capture initial (pre-optimization) capacities for plotting
+    initial_parameters = {}
+    for param_name, (device_idx, attr_name) in parameter_names.items():
+        cap = getattr(sampler.base_devices[device_idx], attr_name)
+        initial_parameters[param_name] = cap.tolist() if hasattr(cap, "tolist") else cap
 
     # -------------------------------------------------------------------------
     # Step 5: Create StochasticPlanningProblem
@@ -404,9 +719,17 @@ def run_experiment(config: dict) -> dict:
     dispatch_solver = getattr(cp, dispatch_solver_name)
     dispatch_solver_kwargs = config.get("dispatch_solver_kwargs", DEFAULT_DISPATCH_SOLVER_KWARGS)
     logger.info(f"Using dispatch solver: {dispatch_solver_name}")
+    if emissions_weight > 0:
+        logger.info(f"Emissions penalty: {emissions_weight} $/ton CO2")
+    else:
+        logger.info("No emissions penalty (emissions_weight=0)")
 
     def op_objective_fn(devices):
-        return DispatchCostObjective(sampler.base_network, devices)
+        f_cost = DispatchCostObjective(sampler.base_network, devices)
+        if emissions_weight > 0:
+            f_emissions = emissions_weight * EmissionsObjective(devices)
+            return f_cost + f_emissions
+        return f_cost
 
     def inv_objective_fn(devices, layer):
         return InvestmentObjective(devices, layer)
@@ -416,6 +739,8 @@ def run_experiment(config: dict) -> dict:
         parameter_names=parameter_names,
         operation_objective_fn=op_objective_fn,
         investment_objective_fn=inv_objective_fn,
+        lower_bounds=lower_bounds,
+        upper_bounds=upper_bounds,
         solver=dispatch_solver,
         solver_kwargs=dispatch_solver_kwargs,
     )
@@ -425,14 +750,10 @@ def run_experiment(config: dict) -> dict:
     logger.info(f"Created problem with {problem.num_subproblems} subproblems")
 
     # -------------------------------------------------------------------------
-    # Step 6: Initialize parallel workers
-    # -------------------------------------------------------------------------
-    if num_workers > 1:
-        logger.info(f"Initializing {num_workers} parallel workers...")
-        problem.initialize_workers(num_workers)
-
-    # -------------------------------------------------------------------------
-    # Step 7: Solve relaxed problem (for lower bound and initialization)
+    # Step 6: Solve relaxed problem (for lower bound and initialization)
+    # Note: must happen BEFORE initializing parallel workers, because
+    # RelaxedPlanningProblem deepcopies the problem and worker pools
+    # (which contain SimpleQueue objects) cannot be pickled.
     # -------------------------------------------------------------------------
     relaxation_config = config.get("relaxation", {})
     should_solve_relaxation = relaxation_config.get("should_solve", True)
@@ -450,8 +771,37 @@ def run_experiment(config: dict) -> dict:
         )
         logger.info(f"Using relaxation solver: {relaxation_solver_name}")
 
+        # Optionally subsample blocks for a smaller relaxation problem
+        num_relaxation_subproblems = relaxation_config.get("num_subproblems", None)
+        if num_relaxation_subproblems is not None and num_relaxation_subproblems < len(blocks):
+            logger.info(
+                f"Subsampling relaxation: {num_relaxation_subproblems} blocks "
+                f"(out of {len(blocks)} total)"
+            )
+            relaxation_blocks = sampler.sample_blocks(
+                block_size=block_size,
+                num_blocks=num_relaxation_subproblems,
+                strategy="uniform",
+            )
+            relaxation_problem = sampler.create_stochastic_problem(
+                blocks=relaxation_blocks,
+                parameter_names=parameter_names,
+                operation_objective_fn=op_objective_fn,
+                investment_objective_fn=inv_objective_fn,
+                lower_bounds=lower_bounds,
+                upper_bounds=upper_bounds,
+                solver=dispatch_solver,
+                solver_kwargs=dispatch_solver_kwargs,
+            )
+            logger.info(
+                f"Solving stochastic relaxation with "
+                f"{relaxation_problem.num_subproblems} scenarios"
+            )
+        else:
+            relaxation_problem = problem
+
         relaxation = RelaxedPlanningProblem(
-            problem,
+            relaxation_problem,
             max_price=relaxation_config.get("price_bound", 100.0),
             solver=relaxation_solver,
             solver_kwargs=relaxation_solver_kwargs,
@@ -462,16 +812,29 @@ def run_experiment(config: dict) -> dict:
         logger.info(f"Relaxation solve took {relax_time:.2f}s")
 
         lower_bound = relax_solve_data["problem"].value
-        logger.info(f"Lower bound from relaxation: {lower_bound:.2f}")
-
-        relaxation_result = {
-            "relaxed_parameters": relaxed_params,
-            "lower_bound": lower_bound,
-            "solve_time": relax_time,
-        }
+        if lower_bound is None:
+            logger.warning(
+                f"Relaxation failed (status: {relax_solve_data['problem'].status}). "
+                "Proceeding without lower bound or warm-start."
+            )
+            relaxation_result = None
+        else:
+            logger.info(f"Lower bound from relaxation: {lower_bound:.2f}")
+            relaxation_result = {
+                "relaxed_parameters": relaxed_params,
+                "lower_bound": lower_bound,
+                "solve_time": relax_time,
+            }
     else:
         logger.info("Skipping relaxation...")
         relax_time = 0.0
+
+    # -------------------------------------------------------------------------
+    # Step 7: Initialize parallel workers (after relaxation to avoid deepcopy issues)
+    # -------------------------------------------------------------------------
+    if num_workers > 1:
+        logger.info(f"Initializing {num_workers} parallel workers...")
+        problem.initialize_workers(num_workers)
 
     # -------------------------------------------------------------------------
     # Step 8: Solve the actual problem with gradient descent
@@ -491,8 +854,6 @@ def run_experiment(config: dict) -> dict:
     logger.info(f"  batch_size: {batch_size}")
     logger.info(f"  batch_strategy: {batch_strategy}")
 
-    start_time = time.time()
-
     # Initialize from relaxation or from scratch
     if initial_state_source == "relaxation" and relaxation_result is not None:
         logger.info("Initializing with relaxation solution.")
@@ -504,20 +865,171 @@ def run_experiment(config: dict) -> dict:
     # Create algorithm
     algorithm = GradientDescent(step_size=step_size, clip=clip)
 
-    # Solve
-    optimal_params, history = problem.solve(
-        num_iterations=num_iterations,
-        algorithm=algorithm,
-        trackers=tr.DEFAULT_TRACKERS,
-        initial_state=initial_state,
-        lower_bound=relaxation_result["lower_bound"] if relaxation_result else None,
-        batch_size=batch_size,
-        batch_strategy=batch_strategy,
-        verbosity=1,
-    )
+    # Build tracker list (always include param trajectory for post-hoc analysis)
+    save_param_history = optimizer_config.get("save_param_history", True)
+    trackers_list = list(tr.DEFAULT_TRACKERS)
+    if save_param_history:
+        trackers_list.append(tr.PARAM)
+        logger.info("  Saving parameter trajectory (save_param_history=true)")
 
-    solve_time = time.time() - start_time
-    logger.info(f"Gradient descent took {solve_time:.2f}s")
+    # Build wandb trackers if enabled
+    extra_wandb_trackers = None
+    if use_wandb:
+        extra_wandb_trackers = get_wandb_trackers(
+            problem, sampler, relaxation_result, config
+        )
+
+    emissions_target_result = None
+    outer_histories = None
+
+    if not adaptive_emissions:
+        # =================================================================
+        # Non-adaptive path: single gradient descent solve (existing behavior)
+        # =================================================================
+        start_time = time.time()
+
+        optimal_params, history = problem.solve(
+            num_iterations=num_iterations,
+            algorithm=algorithm,
+            trackers=trackers_list,
+            initial_state=initial_state,
+            lower_bound=relaxation_result["lower_bound"] if relaxation_result else None,
+            batch_size=batch_size,
+            batch_strategy=batch_strategy,
+            wandb=wandb_logger,
+            log_wandb_every=log_wandb_every,
+            extra_wandb_trackers=extra_wandb_trackers,
+            verbosity=1,
+        )
+
+        solve_time = time.time() - start_time
+        logger.info(f"Gradient descent took {solve_time:.2f}s")
+
+    else:
+        # =================================================================
+        # Adaptive emissions targeting via dual ascent outer loop
+        # =================================================================
+        target = emissions_target_config["target"]
+        initial_weight = emissions_target_config.get("initial_weight", 0.0)
+        dual_step_size = emissions_target_config.get("dual_step_size", 1.0)
+        max_weight = emissions_target_config.get("max_weight", 1000.0)
+        num_outer_iterations = emissions_target_config.get("num_outer_iterations", 10)
+        tolerance = emissions_target_config.get("tolerance", 0.05)
+
+        logger.info("=" * 60)
+        logger.info("Adaptive emissions targeting (dual ascent)")
+        logger.info(f"  target: {target}")
+        logger.info(f"  initial_weight: {initial_weight}")
+        logger.info(f"  dual_step_size: {dual_step_size}")
+        logger.info(f"  max_weight: {max_weight}")
+        logger.info(f"  num_outer_iterations: {num_outer_iterations}")
+        logger.info(f"  tolerance: {tolerance}")
+        logger.info("=" * 60)
+
+        # Build per-subproblem EmissionsObjective list (one-time, cheap)
+        emissions_objectives = [
+            EmissionsObjective(sub.layer.devices) for sub in problem.subproblems
+        ]
+
+        current_params = initial_state
+        current_lambda = initial_weight
+
+        lambda_history = []
+        emissions_history = []
+        outer_histories = []
+        converged = False
+
+        start_time = time.time()
+
+        for outer_iter in range(num_outer_iterations):
+            logger.info("=" * 60)
+            logger.info(
+                f"Outer iteration {outer_iter + 1}/{num_outer_iterations} "
+                f"| lambda={current_lambda:.4f}"
+            )
+            logger.info("=" * 60)
+
+            # 1. Swap objectives on all subproblems with current lambda
+            update_operation_objectives(problem, sampler.base_network, current_lambda)
+
+            # 2. Inner solve (warm-started from current_params)
+            #    LP relaxation bound is only valid for the initial lambda
+            lb = (
+                relaxation_result["lower_bound"]
+                if (relaxation_result and outer_iter == 0)
+                else None
+            )
+
+            optimal_params, history = problem.solve(
+                num_iterations=num_iterations,
+                algorithm=algorithm,
+                trackers=trackers_list,
+                initial_state=current_params,
+                lower_bound=lb,
+                batch_size=batch_size,
+                batch_strategy=batch_strategy,
+                wandb=wandb_logger,
+                log_wandb_every=log_wandb_every,
+                extra_wandb_trackers=extra_wandb_trackers,
+                verbosity=1,
+            )
+
+            outer_histories.append(_serialize_history(history))
+
+            # 3. Evaluate emissions (full-batch forward + per-subproblem evaluation)
+            total_emissions = evaluate_emissions(
+                problem, emissions_objectives, optimal_params
+            )
+
+            # 4. Log progress
+            gap = (
+                (total_emissions - target) / abs(target)
+                if target != 0
+                else float("inf")
+            )
+            logger.info(f"  Emissions: {total_emissions:.2f}")
+            logger.info(f"  Target:    {target:.2f}")
+            logger.info(f"  Gap:       {gap * 100:.2f}%")
+            logger.info(f"  Lambda:    {current_lambda:.4f}")
+
+            lambda_history.append(float(current_lambda))
+            emissions_history.append(float(total_emissions))
+
+            # 5. Check convergence
+            if abs(gap) < tolerance:
+                logger.info(
+                    f"  Converged! |gap| {abs(gap) * 100:.2f}% "
+                    f"< tolerance {tolerance * 100:.2f}%"
+                )
+                converged = True
+                break
+
+            # 6. Dual update: subgradient step, clamped to [0, max_weight]
+            current_lambda = max(
+                0.0, current_lambda + dual_step_size * (total_emissions - target)
+            )
+            current_lambda = min(current_lambda, max_weight)
+            logger.info(f"  Updated lambda: {current_lambda:.4f}")
+
+            # 7. Carry state for warm-start
+            current_params = optimal_params
+
+        solve_time = time.time() - start_time
+        logger.info(f"Dual ascent took {solve_time:.2f}s")
+        logger.info(
+            f"Completed {len(emissions_history)} outer iterations, "
+            f"converged={converged}"
+        )
+
+        emissions_target_result = {
+            "target": float(target),
+            "final_emissions": emissions_history[-1],
+            "final_lambda": float(current_lambda),
+            "lambda_history": lambda_history,
+            "emissions_history": emissions_history,
+            "num_outer_iterations_completed": len(emissions_history),
+            "converged": converged,
+        }
 
     # -------------------------------------------------------------------------
     # Step 9: Extract results
@@ -577,6 +1089,9 @@ def run_experiment(config: dict) -> dict:
     # -------------------------------------------------------------------------
     # Cleanup
     # -------------------------------------------------------------------------
+    if use_wandb and wandb_logger is not None:
+        wandb.finish()
+
     if num_workers > 1:
         problem.shutdown_workers()
 
@@ -585,13 +1100,11 @@ def run_experiment(config: dict) -> dict:
         "num_subproblems": problem.num_subproblems,
         "final_cost": float(final_cost),
         "lower_bound": float(relaxation_result["lower_bound"]) if relaxation_result else None,
+        "initial_parameters": initial_parameters,
         "optimal_parameters": {
             k: v.tolist() if hasattr(v, "tolist") else v for k, v in optimal_params.items()
         },
-        "history": {
-            k: [float(x) if isinstance(x, (int, float, np.floating)) else x for x in v]
-            for k, v in history.items()
-        },
+        "history": _serialize_history(history),
         "timing": {
             "network_loading": load_time,
             "sampler_creation": sampler_time,
@@ -605,6 +1118,10 @@ def run_experiment(config: dict) -> dict:
     if should_export:
         result["export_path"] = str(export_path) if export_path else None
         result["timing"]["export"] = export_time
+
+    if emissions_target_result is not None:
+        result["emissions_target"] = emissions_target_result
+        result["outer_histories"] = outer_histories
 
     return result
 

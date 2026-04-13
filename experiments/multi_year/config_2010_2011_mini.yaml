@@ -1,0 +1,79 @@
+# MINI test version of multi_year_2010_2011
+# Only 4 weeks per year × 2 years = 8 weekly subproblems, 20 iterations
+# Use this to sanity-check the pipeline end-to-end before the full run.
+
+name: multi_year_2010_2011_mini
+
+# Emissions penalty ($/ton CO2). Set to 0 to disable.
+# emissions_weight: 200.0
+emissions_weight: 0.0
+
+network_files:
+  - 2010_elec_s50_c7_ec_lv1.0_ERM-1h.nc
+  - 2011_elec_s50_c7_ec_lv1.0_ERM-1h.nc
+
+hours_per_year: 672     # 4 weeks per year (168 * 4)
+
+block_size: 168
+sampling_strategy: all  # -> 4 blocks/year * 2 years = 8 subproblems total
+
+# Solvers
+num_workers: 4                  # match --cpus-per-task in sbatch
+dispatch_solver: GUROBI
+dispatch_solver_kwargs:
+  verbose: false
+  Method: 2                     # barrier/IPM — fastest for large LPs
+  Crossover: 0                  # skip crossover (don't need vertex solution)
+  BarConvTol: 1.0e-8
+  Threads: 1                    # parallelism lives at the num_workers level
+  OutputFlag: 0
+
+pypsa_args:
+  power_unit: 1000.0
+  cost_unit: 1.0
+
+seed: 42
+
+# Warm-start from the LP relaxation
+relaxation:
+  should_solve: true
+  price_bound: 100.0
+  num_subproblems: 4             # use 4 of 8 blocks for faster relaxation
+  solver: GUROBI
+  solver_kwargs:
+    verbose: false
+    Method: 2
+    Crossover: 0
+    BarConvTol: 1.0e-8
+    Threads: 4                  # single big solve — use all cores
+    OutputFlag: 0
+
+optimizer:
+  num_iterations: 20            # small sweep just to see loss drop
+  step_size: 0.001
+  clip: 1000.0
+  initial_state: relaxation
+  batch_size: 0                 # full batch is fine with only 8 subproblems
+  batch_strategy: sequential
+
+# Weights & Biases logging
+wandb:
+  enabled: true
+  project: zap-multiyear
+  run_name: null                # defaults to experiment name
+  tags: [multi_year, mini, 2yr]
+  log_every: 1
+
+# Adaptive emissions targeting (dual ascent). Overrides emissions_weight when enabled.
+# emissions_target:
+#   enabled: true
+#   target: 50000.0
+#   initial_weight: 0.0
+#   dual_step_size: 1.0
+#   max_weight: 1000.0
+#   num_outer_iterations: 10
+#   tolerance: 0.05
+
+# Still export so you validate the export path too
+export:
+  should_export: true

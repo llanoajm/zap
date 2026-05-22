@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Project config for opencode running inside zap.
+  // - Provider/model are chosen by the user in the web UI; we don't pin them here.
+  // - The default agent is grid-engineer (.opencode/agent/grid-engineer.md), which knows zap's layout
+  //   and the SKILL-based feature-shipping workflow described in AGENTS.md.
+  "provider": {},
+  "mcp": {},
+  "permission": {},
+}

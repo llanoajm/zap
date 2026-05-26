@@ -413,9 +413,15 @@ class StorageUnit(AbstractDevice):
         # Extract results
         c = x[:, :, :T, 0].reshape(N, -1)
         d = x[:, :, T : (2 * T), 0].reshape(N, -1)
-        # s = x[:, :, (2 * T) :, 0].reshape(N, -1)
+        # SOC state `s = x[:, :, (2 * T) :, 0]` is recoverable from charge/
+        # discharge but the ADMM `compute_objective` path consumes the local
+        # variable through `StorageUnit.operation_cost`, which short-circuits
+        # to zero when `state is None`. Returning `None` keeps ADMM running
+        # on PyPSA networks that include storage units without inventing a
+        # `StorageUnitVariable` shape that the device cost function would
+        # mis-interpret.
 
-        return [d - c], None
+        return [d - c], None, None
 
 
 # ====

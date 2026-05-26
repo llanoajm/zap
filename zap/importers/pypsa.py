@@ -136,7 +136,7 @@ def parse_generators(
     active_generator_mask = get_active_assets(pnet, "Generator", snapshots)
     generators = deepcopy(pnet.generators.loc[active_generator_mask])
 
-    terminals = generators.bus.replace(buses_to_index).values.astype(int)
+    terminals = generators.bus.map(buses_to_index).to_numpy(dtype=int)
 
     # Get dynamic data
     dynamic_capacities = (
@@ -158,9 +158,12 @@ def parse_generators(
         .T.loc[active_generator_mask]
         .values
     )
-    dynamic_costs += generator_cost_perturbation * rng.random(
+    # Out-of-place addition: pandas 3.0 hands out read-only ``.values`` arrays
+    # under Copy-on-Write, so the legacy ``+=`` blows up with "output array is
+    # read-only" the moment we touch a real CSV-loaded PyPSA network.
+    dynamic_costs = dynamic_costs + generator_cost_perturbation * rng.random(
         dynamic_costs.shape
-    )  # Perturb costs
+    )
 
     # Build nominal capacities
     # For active non-extendable generators: set min = max = p_nom (fixed capacity)
@@ -223,7 +226,7 @@ def parse_loads(
     active_load_mask = get_active_assets(net, "Load", snapshots)
     loads = deepcopy(net.loads.loc[active_load_mask])
 
-    terminals = loads.bus.replace(buses_to_index).values.astype(int)
+    terminals = loads.bus.map(buses_to_index).to_numpy(dtype=int)
     load = (
         net.get_switchable_as_dense("Load", "p_set", snapshots)
         .T.loc[active_load_mask]
@@ -253,8 +256,8 @@ def parse_loads(
 def get_source_sinks(
     df: pd.DataFrame, buses_to_index: dict
 ) -> Tuple[np.ndarray, np.ndarray]:
-    sources = df.bus0.replace(buses_to_index).values.astype(int)
-    sinks = df.bus1.replace(buses_to_index).values.astype(int)
+    sources = df.bus0.map(buses_to_index).to_numpy(dtype=int)
+    sinks = df.bus1.map(buses_to_index).to_numpy(dtype=int)
     return sources, sinks
 
 
@@ -392,7 +395,7 @@ def parse_storage_units(
     active_storage_mask = get_active_assets(net, "StorageUnit", snapshots)
     storage_units = deepcopy(net.storage_units.loc[active_storage_mask])
 
-    terminals = storage_units.bus.replace(buses_to_index).values.astype(int)
+    terminals = storage_units.bus.map(buses_to_index).to_numpy(dtype=int)
 
     if defaults.quadratic_discharge_cost == 0.0:
         quadratic_cost = None
@@ -446,7 +449,7 @@ def parse_stores(
     active_stores_mask = get_active_assets(net, "Store", dates)
     stores = deepcopy(net.stores.loc[active_stores_mask])
 
-    terminals = stores.bus.replace(buses_to_index).values.astype(int)
+    terminals = stores.bus.map(buses_to_index).to_numpy(dtype=int)
 
     # Dynamic Values
     dynamic_capacity = (

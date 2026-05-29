@@ -16,3 +16,9 @@
 [2026-05-29T14:13:01+00:00] DONE: - [ ] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
 [2026-05-29T14:34:14+00:00] DONE: - [ ] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.
 [2026-05-29T14:50:32+00:00] DONE: - [ ] 3.3 Vertically-integrated utility backtest (ROADMAP §7.2) — SCED/PCM vs suboptimal actual + expansion ranking.
+[2026-05-29T14:53:22+00:00] PARTIAL: - [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion. (attempt 1)
+[2026-05-29T14:53:29+00:00] THROTTLE: sleep 1800s (1/24) [fast-blank(2s)]
+[2026-05-29T15:23:31+00:00] THROTTLE: sleep 1800s (2/24) [fast-blank(2s)]
+[2026-05-29T15:53:34+00:00] THROTTLE: sleep 1800s (3/24) [fast-blank(3s)]
+[2026-05-29T16:23:36+00:00] THROTTLE: sleep 1800s (4/24) [fast-blank(2s)]
+[2026-05-29T16:53:40+00:00] THROTTLE: sleep 1800s (5/24) [fast-blank(4s)]

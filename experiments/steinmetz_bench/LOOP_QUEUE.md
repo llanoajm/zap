@@ -72,7 +72,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bt_utility.py: synthetic fleet+load, least-cost dispatch vs a deliberately-suboptimal "actual"; 5-yr expansion ranking.
   - acceptance:
     - modeled least-cost <= "actual" cost (test asserts); expansion returns a ranked list; PyPSA roundtrip gap < tol; avoided-fuel $/yr + NPV-delta with fidelity band emitted.
-- [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.
+- [x] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.
   - context: experiments/bt_transmission_audit.py: rank corridors by d(system cost)/d(line cap); correlate with synthetic realized-congestion; R2 + missed-corridor count.
   - acceptance:
     - the known-congested corridor ranks #1 (test asserts); rank-correlation with the realized-congestion vector exceeds a threshold; emits R2 BenchResult.

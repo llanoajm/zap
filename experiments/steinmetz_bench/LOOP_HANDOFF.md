@@ -2,7 +2,7 @@
 - [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.
 
 ## Attempt
-1 of 5
+2 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -37,3 +37,9 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
+
+STATUS: done
+SUMMARY: Added bt_transmission_audit.py (3.4): rank corridors ex-ante by zap's adjoint -d(cost)/d(line cap) on a synthetic radial fleet, audit vs realized congestion rent; bottleneck ranks #1, Spearman=1.0, R^2=0.93 (CI [0.92,0.95]), adjoint-vs-FD err 1.3e-5, 0 missed corridors.
+NEXT_STEPS: (none)
+ACCEPTANCE: PASS known-congested corridor (hub-z5) ranks #1; PASS rank-correlation (Spearman 1.0) > 0.6 threshold; PASS emits R^2 BenchResult (headline 0.931, 90% CI, finite-difference fidelity band). Full suite 117 passed, ruff clean.
+VERIFIED: yes

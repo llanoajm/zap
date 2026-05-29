@@ -1,32 +1,44 @@
-## Item just completed (experiments/steinmetz_bench/LOOP_QUEUE.md line 58)
-- [x] 2.5 GPU speed via Modal (ROADMAP §8.4.1 headline)
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 63)
+- [ ] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
 
-## What landed
-- `experiments/bench_gpu_modal.py` — builds a modest (6-bus) + larger (14-bus)
-  uncongested radial PyPSA network, solves each exactly on CPU (zap+CLARABEL),
-  dispatches the EXISTING deployed `zap-opf-solver` Modal app once on an H100,
-  recomputes the GPU objective by re-evaluating zap's cost at the returned
-  dispatch, and caches one timestamped JSON to `data/gpu_runs/`.
-- `experiments/_modal_call.py` — the ONLY modal-touching code; run as a
-  `/usr/bin/python3` subprocess (the venv has no `modal` client) so the verify
-  command can never reach the GPU.
-- `tests/test_bench_gpu_modal.py` — reads only the cache (skips when absent),
-  cross-checks the CPU objective by re-deriving it, asserts machine=="cuda",
-  positive `gpu_elapsed_s`, and objective gap < 1e-2; also validates the
-  objective-reconstruction machinery deterministically with no GPU.
+## Attempt
+1 of 5
 
-## Dispatch result (cached 20260529T135404Z, H100)
-- modest (6 bus): gpu 4.65 s, cpu 0.059 s, objective gap 7.7e-7
-- larger (14 bus): gpu 6.75 s, cpu 0.057 s, objective gap 1.7e-6
-- Cache is intentionally gitignored (`data/*` = human-staged inputs + cached
-  runs); it persists on this machine for verify and survives `git reset --hard`.
-  On a fresh checkout the GPU tests skip, which is the acceptance's blocked path.
+## Context to load before working
+- experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
+- AGENTS.md                                       (zap project guidance: ALWAYS run Python via ./.venv/bin/python; 100-char lines, ruff configured; attrs @define dataclasses; prefer cvxpy.CLARABEL/SCS when no Mosek; finite-difference test pattern lives in zap/tests/test_network.py)
+- README.md                                       (zap scope: differentiable DC-OPF + gradients + gradient-based planning)
+- /home/agent/grid-app/infra/modal/solver_app.py  (ONLY for item 2.5 — the EXISTING zap-opf-solver Modal app; call solve_direct.remote(network_nc, args, import_args))
+- /home/agent/grid-app/infra/modal/README.md       (ONLY for item 2.5 — deploy/run recipe + caveats)
+- /home/agent/grid-app/infra/modal/PARITY_REPORT.md (ONLY for item 2.5 — prior CPU-vs-GPU parity results to build on, not redo)
+- /home/agent/.claude/projects/-home-agent/memory/MEMORY.md  (durable project principles)
+- experiments/steinmetz_bench/LOOP_QUEUE.md            (the queue you're working from)
+- recent tail of experiments/steinmetz_bench/LOOP_JOURNAL.md
 
-## Verify
-`.venv/bin/python -m pytest experiments/steinmetz_bench/tests -q` → 74 passed.
-`.venv/bin/ruff check experiments/steinmetz_bench` → clean.
+## Protocol
+1. Read the context above plus any acceptance criteria nested under the
+   current item in experiments/steinmetz_bench/LOOP_QUEUE.md.
+2. Implement the item against those acceptance criteria. Run `cd /home/agent/zap && .venv/bin/python -m pytest experiments/steinmetz_bench/tests -q && .venv/bin/ruff check experiments/steinmetz_bench`
+   (and any other checks the criteria name) before concluding.
+3. Commit your code changes with a descriptive conventional-commit message.
+4. Overwrite experiments/steinmetz_bench/LOOP_HANDOFF.md to end with EXACTLY these fields, one per line:
+   STATUS: done | partial
+   SUMMARY: <1 sentence, will be embedded in the loop's tag commit>
+   NEXT_STEPS: <only if partial; concrete handoff for the next agent>
+   ACCEPTANCE: <which criteria pass, which don't>
+   Do NOT commit experiments/steinmetz_bench/LOOP_HANDOFF.md — the loop owns the bookkeeping commit.
+
+## Constraints
+- SCOPE: only create/edit files under experiments/steinmetz_bench/**. NEVER modify the zap library core (zap/**) or any other experiments/** dir. Benchmarks import zap read-only.
+- PYTHON: run everything via /home/agent/zap/.venv/bin/python. Solver = cvxpy.CLARABEL or SCS (Mosek only if a license is already present). 100-char lines; ruff is configured; attrs @define dataclasses; snake_case modules.
+- DATA: no live MARKET-data calls anywhere in loop work. All acceptance must pass on SYNTHETIC generators + bundled toy/Garver networks. Real-data code paths must raise DataNotStagedError when data/ is empty — never hang, retry, or download.
+- MODAL/GPU: only in item 2.5. Dispatch the EXISTING grid-app/infra/modal/solver_app.py exactly once, cache the JSON to data/gpu_runs/, and read only the cache from tests. NEVER call Modal from the pytest verify command. If modal CLI / ~/.modal.toml is absent, write STATUS: partial with a reason — do not fail hard or fabricate GPU numbers.
+- ANTI-DEMOWARE (critical): every result number must be COMPUTED by code from an actual zap solve — never a hand-written/expected constant. Tests must re-derive or cross-check the number (finite-difference, recompute, compare to the dual), not merely assert it exists. Do NOT copy the spec's "expected headline" numbers into any report. If you cannot produce a real number on synthetic data, mark the item partial and explain — fabrication is a hard failure.
+- BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
+- CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
+- COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: bench_gpu_modal.py (2.5) dispatches the deployed zap-opf-solver H100 app once, caches data/gpu_runs/*.json, and certifies CPU-vs-GPU objective parity (gap ~1e-6 << 1e-2) with the verify command never touching Modal.
-ACCEPTANCE: PASS — modal CLI + ~/.modal.toml present; cache JSON has machine=="cuda", positive elapsed_s, and CPU-vs-GPU objective gap < 1e-2 on both networks; emits a BenchResult; Modal is never called from the verify command (modal lives only in a system-python subprocess); tests skip cleanly if the cache is absent.
+SUMMARY: Added bt_datacenter_siting.py (3.1) ranking candidate nodes by LMP duration curve + curtailment frequency over seeded scenarios; recovers the cheap-tie-line node and emits a +50 $/MWh delta vs the default with a bootstrap CI, all from real zap DC-OPF solves.
+ACCEPTANCE: PASS — recommended node == the deliberately cheap node; $/MWh delta emitted with bootstrap CI (lo<=mid<=hi, >0); curtailment is a live derived signal (0 at the cheap node, >0 at the starved node). Full verify green: 83 passed, ruff clean.
 VERIFIED: yes

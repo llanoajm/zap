@@ -60,7 +60,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - acceptance:
     - if `modal` CLI + ~/.modal.toml present: data/gpu_runs/*.json exists with machine=="cuda", an elapsed_s, CPU-vs-GPU objective gap < 1e-2; emits BenchResult.
     - if Modal unavailable: self-mark partial/blocked (reason logged) rather than failing the verify.
-- [ ] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
+- [x] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
   - context: experiments/bt_datacenter_siting.py ranking candidate nodes over scenarios, $/MWh delta vs default node.
   - acceptance:
     - on a synthetic net with one deliberately cheap node, the recommended node == that node (test asserts); emits $/MWh delta with bootstrap CI.

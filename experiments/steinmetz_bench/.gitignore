@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .loop-attempts/
+
+# Human-staged inputs + cached runs: keep the dir + its README, ignore contents.
+# `!data/` re-includes the directory (the repo-root .gitignore excludes any `data`),
+# then we ignore its contents but keep the README.
+!data/
+data/*
+!data/README.md

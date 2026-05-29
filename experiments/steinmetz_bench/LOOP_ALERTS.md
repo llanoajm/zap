@@ -22,3 +22,4 @@
 [2026-05-29T15:53:34+00:00] THROTTLE: sleep 1800s (3/24) [fast-blank(3s)]
 [2026-05-29T16:23:36+00:00] THROTTLE: sleep 1800s (4/24) [fast-blank(2s)]
 [2026-05-29T16:53:40+00:00] THROTTLE: sleep 1800s (5/24) [fast-blank(4s)]
+[2026-05-29T17:43:43+00:00] DONE: - [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.

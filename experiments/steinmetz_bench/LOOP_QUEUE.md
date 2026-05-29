@@ -76,7 +76,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bt_transmission_audit.py: rank corridors by d(system cost)/d(line cap); correlate with synthetic realized-congestion; R2 + missed-corridor count.
   - acceptance:
     - the known-congested corridor ranks #1 (test asserts); rank-correlation with the realized-congestion vector exceeds a threshold; emits R2 BenchResult.
-- [ ] 3.5 Mexico EPC dual-regime backtest (ROADMAP §7.4) — corridor ranking under merit-order vs CFE>=54%.
+- [x] 3.5 Mexico EPC dual-regime backtest (ROADMAP §7.4) — corridor ranking under merit-order vs CFE>=54%.
   - context: experiments/bt_mexico_epc.py: rank corridors under (a) merit-order and (b) CFE->=54%-share dispatch constraint; ranking agreement + congestion-relief $/yr.
   - acceptance:
     - both regimes produce rankings; the CFE constraint is demonstrably binding (prices/dispatch shift measurably between regimes — test asserts a measurable shift); a ranking-agreement metric is emitted.

@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 67)
-- [ ] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 71)
+- [ ] 3.3 Vertically-integrated utility backtest (ROADMAP §7.2) — SCED/PCM vs suboptimal actual + expansion ranking.
 
 ## Attempt
 1 of 5
@@ -39,7 +39,6 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: Added bt_datacenter_flex.py (3.2): adjoint-derived battery marginal-value sweep with an interior break-even (FD-checked) plus firm-vs-flexible PowerTarget $/yr saving with bootstrap CI, all computed from real QP solves.
-ACCEPTANCE: PASS break-even battery size found where marginal value crosses the annualized capital cost (~21 MW, coincides with the net-value maximum); PASS firm-vs-flexible $/yr delta emitted with a strictly-positive 90% bootstrap CI; PASS gradient finite-difference-checked (adjoint vs central FD max rel err ~3e-5 < 5e-3, attached as the result's fidelity band). Full suite 94 passed, ruff clean.
-
+SUMMARY: Added bt_utility.py (3.3): SCED least-cost vs islanded suboptimal "actual" dispatch on a synthetic 3-zone fleet, 5-yr expansion ranking by NPV of avoided fuel (binding z12 corridor wins), PyPSA LMP roundtrip band, avoided-fuel $/yr + NPV-delta BenchResult.
+ACCEPTANCE: all pass — modeled SCED <= actual cost per scenario (test_sced_is_at_most_actual, headline avoided 47.4M $/yr > 0); expansion returns a ranked list, sorted by NPV with binding corridor expand-z12 #1 (test_expansion_ranking_sorted_and_binding_corridor_wins); PyPSA roundtrip LMP gap 1.66e-4 < 1e-2 tol + cost rel-gap < 1e-2 (test_pypsa_roundtrip_within_tol); avoided-fuel $/yr (CI) + NPV-delta + pypsa-dc fidelity band emitted and reparse from markdown (test_emits_reparseable_bench_result); --real blocks via DataNotStagedError. Full suite: 104 passed, ruff clean.
 VERIFIED: yes

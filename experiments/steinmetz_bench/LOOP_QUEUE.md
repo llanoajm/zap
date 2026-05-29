@@ -68,7 +68,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bt_datacenter_flex.py: d(savings)/d(battery MW) break-even + firm-vs-flexible $/yr.
   - acceptance:
     - a break-even battery size is found where marginal value ~ marginal cost; firm-vs-flexible $/yr delta with CI; the gradient is finite-difference-checked (test asserts FD agreement).
-- [ ] 3.3 Vertically-integrated utility backtest (ROADMAP §7.2) — SCED/PCM vs suboptimal actual + expansion ranking.
+- [x] 3.3 Vertically-integrated utility backtest (ROADMAP §7.2) — SCED/PCM vs suboptimal actual + expansion ranking.
   - context: experiments/bt_utility.py: synthetic fleet+load, least-cost dispatch vs a deliberately-suboptimal "actual"; 5-yr expansion ranking.
   - acceptance:
     - modeled least-cost <= "actual" cost (test asserts); expansion returns a ranked list; PyPSA roundtrip gap < tol; avoided-fuel $/yr + NPV-delta with fidelity band emitted.

@@ -14,3 +14,4 @@
 [2026-05-29T13:42:25+00:00] DONE: - [ ] 2.4 Sensitivity-correctness report (ROADMAP §8.4.4) — published per-device-type gradient-error table.
 [2026-05-29T14:00:36+00:00] DONE: - [ ] 2.5 GPU speed via Modal (ROADMAP §8.4.1 headline) — dispatch zap-opf-solver on H100, cache result.
 [2026-05-29T14:13:01+00:00] DONE: - [ ] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
+[2026-05-29T14:34:14+00:00] DONE: - [ ] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.

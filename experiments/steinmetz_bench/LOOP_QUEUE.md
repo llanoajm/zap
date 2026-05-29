@@ -19,7 +19,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - acceptance:
     - test loads a synthetic 5-node net and the Garver net; asserts expected device counts/shapes.
     - missing-cache path raises `DataNotStagedError` with a clear message (test asserts the raise).
-- [ ] 0.3 Scoring harness (ROADMAP Phase 0) — counterfactual delta, bootstrap CI, duration curve, fidelity band.
+- [x] 0.3 Scoring harness (ROADMAP Phase 0) — counterfactual delta, bootstrap CI, duration curve, fidelity band.
   - context: scoring/metrics.py with counterfactual_delta(), bootstrap_ci(), duration_curve(), fidelity_band().
   - acceptance:
     - unit test: bootstrap_ci returns lo<=mid<=hi on a synthetic array; duration_curve is monotone non-increasing.

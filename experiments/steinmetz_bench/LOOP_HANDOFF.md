@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 17)
-- [ ] 0.2 Dataset registry + loaders (ROADMAP Phase 0) — resolve a DatasetSpec to a zap network + frames.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 22)
+- [ ] 0.3 Scoring harness (ROADMAP Phase 0) — counterfactual delta, bootstrap CI, duration curve, fidelity band.
 
 ## Attempt
 1 of 5
@@ -39,6 +39,6 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: Dataset registry resolves a DatasetSpec to a zap network+devices+time index via synthetic/builtin/cache kinds, with a real solving+price-separating synthetic generator and DataNotStagedError on empty cache.
-ACCEPTANCE: PASS — synthetic 5-node net asserts gen=2/load=1/line=4 device counts and (1,24) load shape; Garver builtin asserts 3 gen/5 load/15 line; congestion test dispatches under CLARABEL and asserts tight-line price spread > free; missing-cache raises DataNotStagedError naming the dir. All 9 tests pass, ruff clean.
+SUMMARY: Added scoring/metrics.py (counterfactual_delta, bootstrap_ci, duration_curve, fidelity_band) as pure-numpy, deterministic primitives with cross-checking unit tests.
+ACCEPTANCE: PASS — bootstrap_ci returns lo<=mid<=hi on a synthetic array (test_bootstrap_ci_is_ordered, percentile bootstrap with mid=P50 guarantees ordering); duration_curve is monotone non-increasing (test_duration_curve_is_monotone_non_increasing asserts np.diff <= 0). Full verify green: 18 passed, ruff clean. Bonus cross-checks: CI determinism/width, duration-curve percentile vs numpy, fidelity_band gaps vs numpy, counterfactual_delta scalar+array.
 VERIFIED: yes

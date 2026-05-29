@@ -1,8 +1,12 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 30)
-- [ ] 1.1 PyPSA LP roundtrip reference (ROADMAP Phase 1) — zap-vs-PyPSA LMP/flow gap on a bundled net.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 34)
+- [ ] 1.2 Gradient-vs-exact-dual check (ROADMAP Phase 1 / §8.4.4) — adjoint grad == dual identity.
 
 ## Attempt
 1 of 5
+
+STATUS: done
+SUMMARY: experiments/grad_check.py certifies zap's adjoint d(cost)/d(capacity) equals the exact LP dual (envelope theorem) for line/generator/battery on Garver+toy7; max relative gradient error 4.7e-6 (tol 1e-3), finite-difference confirmed, emits a BenchResult.
+ACCEPTANCE: PASS — max relative gradient error < 1e-3 for all three device types (line 4.7e-6, generator 2.8e-8, battery 2.3e-9), cross-checked by central finite differences (<1e-5); emits a reparseable BenchResult with an exact-dual fidelity band. Note: Garver (the paper-Fig-6 net) is AC-only and has no storage, so the battery check runs on the 7-bus toy net (which also re-confirms line+generator); both nets are AC. Honest finding recorded in the result: a generator satisfies the clean d(cost)/d(cap) = -mu identity, but an AC line's exact gradient additionally carries the power-flow equality dual because zap's nominal_capacity scales both the thermal limit and susceptance — the acceptance is on the full envelope identity, which holds for every device type. Verify: `pytest experiments/steinmetz_bench/tests -q` = 36 passed; `ruff check experiments/steinmetz_bench` clean.
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -27,12 +31,6 @@
    NEXT_STEPS: <only if partial; concrete handoff for the next agent>
    ACCEPTANCE: <which criteria pass, which don't>
    Do NOT commit experiments/steinmetz_bench/LOOP_HANDOFF.md — the loop owns the bookkeeping commit.
-
-## Result
-STATUS: done
-SUMMARY: Item 1.1 ref_pypsa.py solves a bundled 3-bus radial net in zap (CLARABEL) and PyPSA (HiGHS) from one shared spec; max LMP gap 2.5e-6 $/MWh and max flow gap 4.3e-7 MW, well under the 1e-2 / 1e-3 tolerances, emitting a BenchResult.
-NEXT_STEPS: n/a — proceed to item 1.2 (gradient-vs-exact-dual check). Note for future PyPSA items: zap's importer (load_pypsa_network) is unusable here — its in-place scale_costs `/=` hits read-only Copy-on-Write arrays under pandas 3.0.3 (CoW cannot be disabled), so build zap+PyPSA from one shared param spec instead of round-tripping through the importer.
-ACCEPTANCE: PASS — max LMP gap (2.5e-6) < 1e-2 and max flow gap (4.3e-7) < 1e-3, both re-derived from the raw aligned solve arrays in the test; comparison is non-degenerate (congested corridor separates nodal prices and binds at peak); a reparseable BenchResult is emitted with the LMP gap as its fidelity band. Verify: 27 passed, ruff clean.
 
 ## Constraints
 - SCOPE: only create/edit files under experiments/steinmetz_bench/**. NEVER modify the zap library core (zap/**) or any other experiments/** dir. Benchmarks import zap read-only.

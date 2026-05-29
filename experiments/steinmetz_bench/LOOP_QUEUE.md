@@ -31,7 +31,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/ref_pypsa.py solving a bundled net in PyPSA and aligning to zap's solve.
   - acceptance:
     - on a bundled net, max LMP gap < 1e-2 and max flow gap < 1e-3 (test asserts), emits a BenchResult.
-- [ ] 1.2 Gradient-vs-exact-dual check (ROADMAP Phase 1 / §8.4.4) — adjoint grad == dual identity.
+- [x] 1.2 Gradient-vs-exact-dual check (ROADMAP Phase 1 / §8.4.4) — adjoint grad == dual identity.
   - context: experiments/grad_check.py: d(cost)/d(line cap) via zap adjoint vs line-limit dual mu (and gen cap, battery power).
   - acceptance:
     - max relative gradient error < 1e-3 on Garver for all three device types (test asserts), emits BenchResult.

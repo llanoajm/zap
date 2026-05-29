@@ -23,7 +23,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: scoring/metrics.py with counterfactual_delta(), bootstrap_ci(), duration_curve(), fidelity_band().
   - acceptance:
     - unit test: bootstrap_ci returns lo<=mid<=hi on a synthetic array; duration_curve is monotone non-increasing.
-- [ ] 0.4 Result schema + report writer (ROADMAP Phase 0) — BenchResult dataclass + JSON + md stub.
+- [x] 0.4 Result schema + report writer (ROADMAP Phase 0) — BenchResult dataclass + JSON + md stub.
   - context: reports/result.py: BenchResult(experiment_id, dataset, headline_number, units, ci, fidelity_band, assumptions, sensitivities).
   - acceptance:
     - BenchResult round-trips to/from JSON (test); a written markdown stub file exists and re-parses.

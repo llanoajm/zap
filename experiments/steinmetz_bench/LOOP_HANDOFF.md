@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 22)
-- [ ] 0.3 Scoring harness (ROADMAP Phase 0) — counterfactual delta, bootstrap CI, duration curve, fidelity band.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 26)
+- [ ] 0.4 Result schema + report writer (ROADMAP Phase 0) — BenchResult dataclass + JSON + md stub.
 
 ## Attempt
 1 of 5
@@ -39,6 +39,7 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: Added scoring/metrics.py (counterfactual_delta, bootstrap_ci, duration_curve, fidelity_band) as pure-numpy, deterministic primitives with cross-checking unit tests.
-ACCEPTANCE: PASS — bootstrap_ci returns lo<=mid<=hi on a synthetic array (test_bootstrap_ci_is_ordered, percentile bootstrap with mid=P50 guarantees ordering); duration_curve is monotone non-increasing (test_duration_curve_is_monotone_non_increasing asserts np.diff <= 0). Full verify green: 18 passed, ruff clean. Bonus cross-checks: CI determinism/width, duration-curve percentile vs numpy, fidelity_band gaps vs numpy, counterfactual_delta scalar+array.
+SUMMARY: Added reports/result.py BenchResult dataclass with lossless JSON round-trip and a markdown stub writer that embeds and re-parses its canonical JSON.
+ACCEPTANCE: PASS — BenchResult round-trips to/from JSON (test_json_round_trip_is_lossless, optional-fields variant, write_json file read-back); a markdown stub is written and re-parses to an identical result (test_markdown_stub_is_written_and_reparses); parse rejects markdown lacking the JSON block. All 23 tests pass; ruff clean.
+
 VERIFIED: yes

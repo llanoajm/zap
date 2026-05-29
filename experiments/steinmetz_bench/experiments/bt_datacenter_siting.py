@@ -36,6 +36,8 @@ from typing import Optional
 
 import cvxpy as cp
 import numpy as np
+import pandas as pd
+import pypsa
 from attrs import define, field
 
 from zap.devices import ACLine, Generator, Load
@@ -46,8 +48,10 @@ from experiments.steinmetz_bench.reports.result import BenchResult
 from experiments.steinmetz_bench.scoring.metrics import (
     CIResult,
     DurationCurve,
+    FidelityBand,
     bootstrap_ci,
     duration_curve,
+    fidelity_band,
 )
 
 EXPERIMENT_ID = "3.1-datacenter-siting"
@@ -56,6 +60,10 @@ DATASET = "synthetic-siting-star"
 # A node counts as curtailed in an hour when its served data-center load falls more
 # than this many MW short of the requested flat draw.
 CURTAIL_TOL = 1e-3
+
+# Per-tie-line susceptance of the star network (shared by the zap build and its
+# PyPSA twin, where the equivalent line reactance is ``1 / _TIE_SUSCEPTANCE``).
+_TIE_SUSCEPTANCE = 10.0
 
 
 @define(kw_only=True)
@@ -147,6 +155,7 @@ class SitingResult:
     default_node: int
     delta_samples: np.ndarray  # (scenario * hour,), default LMP - recommended LMP
     ci: CIResult
+    fidelity: FidelityBand  # DC-vs-PyPSA LMP gap on the headline placements
     source: str = field(default="synthetic")
 
     @property
@@ -187,11 +196,17 @@ class SitingResult:
             headline_number=self.headline_delta,
             units="$/MWh",
             ci=self.ci,
-            fidelity_band=None,
+            fidelity_band=self.fidelity,
             assumptions={
                 "source": self.source,
                 "zap_solver": "CLARABEL",
+                "pypsa_solver": "highs",
                 "topology": "star: cheap hub generator + radial tie lines to candidates",
+                "fidelity_band": (
+                    "DC-vs-PyPSA nodal-LMP gap on the nominal scenario at the default "
+                    "and recommended placements (both curtailment-free, so the two LPs "
+                    "are identical and the band is the solver-vs-solver floor)"
+                ),
                 "dc_mw": self.config.dc_mw,
                 "n_candidates": self.config.n_candidates,
                 "n_scenarios": self.config.n_scenarios,
@@ -282,7 +297,7 @@ def _build_devices(config: SitingConfig, scenario: Scenario, dc_node: int):
         num_nodes=n_nodes,
         source_terminal=np.full(k, hub),
         sink_terminal=np.arange(k),
-        susceptance=np.full(k, 10.0),
+        susceptance=np.full(k, _TIE_SUSCEPTANCE),
         capacity=np.ones(k),
         nominal_capacity=np.asarray(config.line_caps, float),
         linear_cost=0.01 * np.ones(k),
@@ -310,6 +325,94 @@ def _solve_placement(config: SitingConfig, scenario: Scenario, dc_node: int):
     return lmp, served
 
 
+def _nominal_scenario(config: SitingConfig) -> Scenario:
+    """The no-noise, mid-load-scale scenario used for the PyPSA fidelity check.
+
+    Stripping the seeded cost noise makes generator marginal costs constant over
+    the horizon, so the zap and PyPSA LPs are term-for-term identical and any LMP
+    gap is pure solver-vs-solver numerical noise.
+    """
+    base = _baseline_shape(config)
+    n_gen = config.n_candidates + 1
+    costs = np.concatenate([[config.hub_cost], np.asarray(config.backstop_costs, float)])
+    gen_cost = costs[:, None] * np.ones((1, config.hours))
+    mid_scale = 0.5 * (config.load_scale_lo + config.load_scale_hi)
+    load_profile = np.tile(base * mid_scale, (config.n_candidates, 1))
+    assert gen_cost.shape == (n_gen, config.hours)
+    return Scenario(gen_cost=gen_cost, load_profile=load_profile)
+
+
+def _pypsa_bus_names(config: SitingConfig) -> list[str]:
+    """Bus order matching zap node indices: candidate ``i`` -> node ``i``, hub last."""
+    return [f"cand{i}" for i in range(config.n_candidates)] + ["hub"]
+
+
+def build_pypsa_placement(
+    config: SitingConfig, scenario: Scenario, dc_node: int
+) -> pypsa.Network:
+    """Equivalent PyPSA star network with the data center attached at ``dc_node``.
+
+    Generator marginal costs are read from ``scenario`` (constant over the horizon
+    for the nominal scenario). Each candidate bus carries a load-shedding generator
+    priced at the value of lost load, mirroring zap's curtailable :class:`Load`
+    (whose ``linear_cost`` is the VOLL penalty for unserved demand), so the two
+    formulations remain equivalent even if a placement curtails.
+    """
+    k = config.n_candidates
+    bus_names = _pypsa_bus_names(config)
+    snapshots = pd.date_range("2025-01-01", periods=config.hours, freq="h")
+    pn = pypsa.Network()
+    pn.set_snapshots(snapshots)
+    for bus in bus_names:
+        pn.add("Bus", bus)
+    pn.add("Carrier", "ac", co2_emissions=0.0)
+
+    pn.add("Generator", "hub", bus="hub", p_nom=config.hub_cap,
+           marginal_cost=float(scenario.gen_cost[0, 0]), carrier="ac")
+    shed_pnom = config.baseline_peak * config.load_scale_hi + config.dc_mw
+    for i in range(k):
+        pn.add("Generator", f"backstop{i}", bus=f"cand{i}",
+               p_nom=float(config.backstop_caps[i]),
+               marginal_cost=float(scenario.gen_cost[i + 1, 0]), carrier="ac")
+        pn.add("Generator", f"shed{i}", bus=f"cand{i}", p_nom=float(shed_pnom),
+               marginal_cost=config.voll, carrier="ac")
+        pn.add("Load", f"load{i}", bus=f"cand{i}", p_set=scenario.load_profile[i])
+        pn.add("Line", f"tie{i}", bus0="hub", bus1=f"cand{i}",
+               s_nom=float(config.line_caps[i]), x=1.0 / _TIE_SUSCEPTANCE)
+    pn.add("Load", "datacenter", bus=f"cand{dc_node}",
+           p_set=np.full(config.hours, config.dc_mw))
+    return pn
+
+
+def run_pypsa_fidelity(config: SitingConfig, placements) -> FidelityBand:
+    """DC-vs-PyPSA nodal-LMP band over the given placements on the nominal scenario.
+
+    For each placement the star network is solved in zap (CLARABEL) and in PyPSA
+    (HiGHS) and their full nodal-price vectors are compared. ``placements`` are the
+    default and recommended nodes — the ones the headline $/MWh delta is read from.
+    """
+    nominal = _nominal_scenario(config)
+    bus_names = _pypsa_bus_names(config)
+    zap_prices: list[np.ndarray] = []
+    pypsa_prices: list[np.ndarray] = []
+    for node in placements:
+        net, devices, _ = _build_devices(config, nominal, node)
+        out = net.dispatch(devices, time_horizon=config.hours, solver=cp.CLARABEL)
+        if out.problem.status not in ("optimal", "optimal_inaccurate"):
+            raise RuntimeError(f"zap dispatch did not solve: status={out.problem.status}")
+        zap_prices.append(np.asarray(out.prices, dtype=float))
+
+        pn = build_pypsa_placement(config, nominal, node)
+        pn.snapshot_weightings.loc[:, :] = 1.0
+        pn.optimize(solver_name="highs")
+        pl = pn.buses_t.marginal_price[bus_names].to_numpy(dtype=float).T
+        pypsa_prices.append(pl)
+
+    zap = np.concatenate([a.ravel() for a in zap_prices])
+    pypsa = np.concatenate([a.ravel() for a in pypsa_prices])
+    return fidelity_band(zap, pypsa, reference="pypsa-dc", metric="lmp", units="$/MWh")
+
+
 def run_siting(config: Optional[SitingConfig] = None) -> SitingResult:
     """Rank candidate nodes and quantify the siting $/MWh delta on synthetic data."""
     config = config or SitingConfig()
@@ -334,6 +437,7 @@ def run_siting(config: Optional[SitingConfig] = None) -> SitingResult:
     default = config.default_node
     delta_samples = (nodes[default].lmp - nodes[recommended].lmp).ravel()
     ci = bootstrap_ci(delta_samples, statistic=np.mean, confidence=0.90, seed=0)
+    fidelity = run_pypsa_fidelity(config, sorted({default, recommended}))
     return SitingResult(
         config=config,
         nodes=nodes,
@@ -341,6 +445,7 @@ def run_siting(config: Optional[SitingConfig] = None) -> SitingResult:
         default_node=default,
         delta_samples=delta_samples,
         ci=ci,
+        fidelity=fidelity,
         source="synthetic",
     )
 

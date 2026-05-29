@@ -2,7 +2,7 @@
 - [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.
 
 ## Attempt
-3 of 5
+4 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -37,3 +37,8 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
+
+STATUS: done
+SUMMARY: run_all.py assembles all 10 §8.4/§7 headlines (+3 Phase 1 refs) into STEINMETZ_BENCH.md and its JSON sidecar from real zap solves; --synthetic exits 0 with every headline id present and full suite + ruff green.
+ACCEPTANCE: PASS — `python -m experiments.steinmetz_bench.run_all --synthetic` exits 0 and writes STEINMETZ_BENCH.md (13/13 reporting); report+sidecar contain all 10 headline ids (2.1/2.2/2.3/2.4/2.5 + 3.1/3.2/3.3/3.4/3.5); test_run_all asserts each id present and re-derives every headline from the sidecar BenchResult (anti-demoware); --real blocks via DataNotStagedError; 141 tests pass + ruff clean in ~5m18s, under the 10-min verify budget.
+VERIFIED: yes

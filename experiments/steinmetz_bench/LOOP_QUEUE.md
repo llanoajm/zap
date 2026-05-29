@@ -84,7 +84,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: every BenchResult from Phases 1-3 carries a non-null fidelity_band (DC-vs-PyPSA, DC-vs-realized where applicable).
   - acceptance:
     - a test iterates all produced results and asserts fidelity_band present and well-formed.
-- [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.
+- [x] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.
   - context: run_all.py building reports/STEINMETZ_BENCH.md with §8.4 tables + §7 headlines, CIs, fidelity bands; --synthetic (loop) / --real (human).
   - acceptance:
     - `python -m experiments.steinmetz_bench.run_all --synthetic` exits 0 and writes a report containing all 10 experiment ids (test asserts each id present).

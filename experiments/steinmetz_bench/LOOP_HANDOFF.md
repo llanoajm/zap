@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 63)
-- [ ] 3.1 Data-center siting backtest (ROADMAP §7.1-A) — rank nodes by LMP duration curve + curtailment.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 67)
+- [ ] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.
 
 ## Attempt
 1 of 5
@@ -39,6 +39,7 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: Added bt_datacenter_siting.py (3.1) ranking candidate nodes by LMP duration curve + curtailment frequency over seeded scenarios; recovers the cheap-tie-line node and emits a +50 $/MWh delta vs the default with a bootstrap CI, all from real zap DC-OPF solves.
-ACCEPTANCE: PASS — recommended node == the deliberately cheap node; $/MWh delta emitted with bootstrap CI (lo<=mid<=hi, >0); curtailment is a live derived signal (0 at the cheap node, >0 at the starved node). Full verify green: 83 passed, ruff clean.
+SUMMARY: Added bt_datacenter_flex.py (3.2): adjoint-derived battery marginal-value sweep with an interior break-even (FD-checked) plus firm-vs-flexible PowerTarget $/yr saving with bootstrap CI, all computed from real QP solves.
+ACCEPTANCE: PASS break-even battery size found where marginal value crosses the annualized capital cost (~21 MW, coincides with the net-value maximum); PASS firm-vs-flexible $/yr delta emitted with a strictly-positive 90% bootstrap CI; PASS gradient finite-difference-checked (adjoint vs central FD max rel err ~3e-5 < 5e-3, attached as the result's fidelity band). Full suite 94 passed, ruff clean.
+
 VERIFIED: yes

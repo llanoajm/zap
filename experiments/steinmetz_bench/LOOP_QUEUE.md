@@ -64,7 +64,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bt_datacenter_siting.py ranking candidate nodes over scenarios, $/MWh delta vs default node.
   - acceptance:
     - on a synthetic net with one deliberately cheap node, the recommended node == that node (test asserts); emits $/MWh delta with bootstrap CI.
-- [ ] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.
+- [x] 3.2 Data-center flexibility & battery sizing (ROADMAP §7.1-B) — PowerTarget flex load + battery break-even.
   - context: experiments/bt_datacenter_flex.py: d(savings)/d(battery MW) break-even + firm-vs-flexible $/yr.
   - acceptance:
     - a break-even battery size is found where marginal value ~ marginal cost; firm-vs-flexible $/yr delta with CI; the gradient is finite-difference-checked (test asserts FD agreement).

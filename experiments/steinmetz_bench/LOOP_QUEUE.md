@@ -35,7 +35,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/grad_check.py: d(cost)/d(line cap) via zap adjoint vs line-limit dual mu (and gen cap, battery power).
   - acceptance:
     - max relative gradient error < 1e-3 on Garver for all three device types (test asserts), emits BenchResult.
-- [ ] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.
+- [x] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.
   - context: experiments/realized_lmp.py computing per-node/hour error from a price_frame (synthetic fixture now).
   - acceptance:
     - on a synthetic price_frame fixture, emits an error distribution (mean/median/p90); missing-cache path blocks via DataNotStagedError, not test failure.

@@ -1,12 +1,8 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 34)
-- [ ] 1.2 Gradient-vs-exact-dual check (ROADMAP Phase 1 / §8.4.4) — adjoint grad == dual identity.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 38)
+- [ ] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.
 
 ## Attempt
 1 of 5
-
-STATUS: done
-SUMMARY: experiments/grad_check.py certifies zap's adjoint d(cost)/d(capacity) equals the exact LP dual (envelope theorem) for line/generator/battery on Garver+toy7; max relative gradient error 4.7e-6 (tol 1e-3), finite-difference confirmed, emits a BenchResult.
-ACCEPTANCE: PASS — max relative gradient error < 1e-3 for all three device types (line 4.7e-6, generator 2.8e-8, battery 2.3e-9), cross-checked by central finite differences (<1e-5); emits a reparseable BenchResult with an exact-dual fidelity band. Note: Garver (the paper-Fig-6 net) is AC-only and has no storage, so the battery check runs on the 7-bus toy net (which also re-confirms line+generator); both nets are AC. Honest finding recorded in the result: a generator satisfies the clean d(cost)/d(cap) = -mu identity, but an AC line's exact gradient additionally carries the power-flow equality dual because zap's nominal_capacity scales both the thermal limit and susceptance — the acceptance is on the full envelope identity, which holds for every device type. Verify: `pytest experiments/steinmetz_bench/tests -q` = 36 passed; `ruff check experiments/steinmetz_bench` clean.
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -41,4 +37,8 @@ ACCEPTANCE: PASS — max relative gradient error < 1e-3 for all three device typ
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
+
+STATUS: done
+SUMMARY: realized_lmp.py computes the zap-vs-realized per-node/hour LMP error distribution on a synthetic congested net (mean 8.87 $/MWh, p90 10.57, max 69.44), with the --real path blocking via DataNotStagedError.
+ACCEPTANCE: PASS — on a synthetic price_frame fixture it emits a mean/median/p90/max error distribution with a bootstrap CI and realized-lmp fidelity band (re-derived from the raw aligned arrays in tests, non-degenerate); the missing-cache path (load_realized_frame / run_realized) raises DataNotStagedError rather than failing. Full verify green: 45 passed, ruff clean.
 VERIFIED: yes

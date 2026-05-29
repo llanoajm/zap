@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 71)
-- [ ] 3.3 Vertically-integrated utility backtest (ROADMAP §7.2) — SCED/PCM vs suboptimal actual + expansion ranking.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 75)
+- [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.
 
 ## Attempt
 1 of 5
@@ -37,8 +37,3 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
-
-STATUS: done
-SUMMARY: Added bt_utility.py (3.3): SCED least-cost vs islanded suboptimal "actual" dispatch on a synthetic 3-zone fleet, 5-yr expansion ranking by NPV of avoided fuel (binding z12 corridor wins), PyPSA LMP roundtrip band, avoided-fuel $/yr + NPV-delta BenchResult.
-ACCEPTANCE: all pass — modeled SCED <= actual cost per scenario (test_sced_is_at_most_actual, headline avoided 47.4M $/yr > 0); expansion returns a ranked list, sorted by NPV with binding corridor expand-z12 #1 (test_expansion_ranking_sorted_and_binding_corridor_wins); PyPSA roundtrip LMP gap 1.66e-4 < 1e-2 tol + cost rel-gap < 1e-2 (test_pypsa_roundtrip_within_tol); avoided-fuel $/yr (CI) + NPV-delta + pypsa-dc fidelity band emitted and reparse from markdown (test_emits_reparseable_bench_result); --real blocks via DataNotStagedError. Full suite: 104 passed, ruff clean.
-VERIFIED: yes

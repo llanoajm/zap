@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 38)
-- [ ] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 42)
+- [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
 
 ## Attempt
 1 of 5
@@ -37,8 +37,3 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
-
-STATUS: done
-SUMMARY: realized_lmp.py computes the zap-vs-realized per-node/hour LMP error distribution on a synthetic congested net (mean 8.87 $/MWh, p90 10.57, max 69.44), with the --real path blocking via DataNotStagedError.
-ACCEPTANCE: PASS — on a synthetic price_frame fixture it emits a mean/median/p90/max error distribution with a bootstrap CI and realized-lmp fidelity band (re-derived from the raw aligned arrays in tests, non-degenerate); the missing-cache path (load_realized_frame / run_realized) raises DataNotStagedError rather than failing. Full verify green: 45 passed, ruff clean.
-VERIFIED: yes

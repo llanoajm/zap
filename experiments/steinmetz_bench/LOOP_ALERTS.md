@@ -4,3 +4,4 @@
 [2026-05-29T11:38:27+00:00] DONE: - [ ] 0.4 Result schema + report writer (ROADMAP Phase 0) — BenchResult dataclass + JSON + md stub.
 [2026-05-29T11:47:28+00:00] DONE: - [ ] 1.1 PyPSA LP roundtrip reference (ROADMAP Phase 1) — zap-vs-PyPSA LMP/flow gap on a bundled net.
 [2026-05-29T12:04:52+00:00] DONE: - [ ] 1.2 Gradient-vs-exact-dual check (ROADMAP Phase 1 / §8.4.4) — adjoint grad == dual identity.
+[2026-05-29T12:10:10+00:00] DONE: - [ ] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.

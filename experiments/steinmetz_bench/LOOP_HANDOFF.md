@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 46)
-- [ ] 2.2 Planning benchmark (ROADMAP §8.4.2) — gradient planner vs baseline on small expansion.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 50)
+- [ ] 2.3 Accuracy benchmark (ROADMAP §8.4.3) — LMP/congestion error distributions vs PyPSA and realized.
 
 ## Attempt
 1 of 5
@@ -39,6 +39,6 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: bench_planning.py (2.2) pits zap's gradient expansion planner against an independent jointly-convex multi-scenario expansion LP/QP and certifies the planner converges to within ~2.5e-3 of the global optimum across gen+line+battery levers.
-ACCEPTANCE: PASS planner final objective <= baseline + tol (test_planner_reaches_global_optimum: opt gap ~1.2e-3 at hours=8, ~2.5e-3 at the hours=4 test cfg, both < OPT_REL_TOL=1e-2, re-derived from raw objectives); PASS converges within a fixed iteration budget (diminishing-step schedule, n_iterations asserted == schedule sum); PASS timing recorded in BenchResult (planner_solve_seconds > 0 asserted); PASS anti-demoware cross-check (LP per-scenario op cost == zap dispatch at fixed caps); PASS multi-scenario (n_scenarios>=2) + 3 levers with an interior optimum; full suite 56 passed, ruff clean.
+SUMMARY: Added bench_accuracy.py (2.3) assembling LMP + congestion-component error distributions vs PyPSA (fidelity floor ~0) and vs realized (headline ~8.9 $/MWh mean), with --real staged-ISO path that blocks via DataNotStagedError.
+ACCEPTANCE: PASS emits a distribution BenchResult on fixtures (mean/median/p90/max + bootstrap CI per reference, all re-derived from raw arrays in tests, not point estimates); PASS --synthetic loop path (63 tests green, ruff clean); PASS --real path parameterized and blocks cleanly via DataNotStagedError.
 VERIFIED: yes

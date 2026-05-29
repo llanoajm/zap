@@ -47,7 +47,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bench_planning.py: gradient planner vs brute/implicit-diff baseline, multi-scenario, gen+line+battery caps.
   - acceptance:
     - planner final objective <= baseline + tol (test asserts); converges within a fixed iteration budget; timing recorded in BenchResult.
-- [ ] 2.3 Accuracy benchmark (ROADMAP §8.4.3) — LMP/congestion error distributions vs PyPSA and realized.
+- [x] 2.3 Accuracy benchmark (ROADMAP §8.4.3) — LMP/congestion error distributions vs PyPSA and realized.
   - context: experiments/bench_accuracy.py assembling error vs ref_pypsa (1.1) and realized (1.3) as distributions.
   - acceptance:
     - emits a distribution BenchResult on fixtures; --real path parameterized (human) but --synthetic passes in the loop (test asserts synthetic path).

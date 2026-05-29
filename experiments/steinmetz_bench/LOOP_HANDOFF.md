@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 50)
-- [ ] 2.3 Accuracy benchmark (ROADMAP §8.4.3) — LMP/congestion error distributions vs PyPSA and realized.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 54)
+- [ ] 2.4 Sensitivity-correctness report (ROADMAP §8.4.4) — published per-device-type gradient-error table.
 
 ## Attempt
 1 of 5
@@ -39,6 +39,6 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: Added bench_accuracy.py (2.3) assembling LMP + congestion-component error distributions vs PyPSA (fidelity floor ~0) and vs realized (headline ~8.9 $/MWh mean), with --real staged-ISO path that blocks via DataNotStagedError.
-ACCEPTANCE: PASS emits a distribution BenchResult on fixtures (mean/median/p90/max + bootstrap CI per reference, all re-derived from raw arrays in tests, not point estimates); PASS --synthetic loop path (63 tests green, ruff clean); PASS --real path parameterized and blocks cleanly via DataNotStagedError.
+SUMMARY: Added bench_sensitivity.py (2.4) wrapping the 1.2 grad-vs-dual check into a published per-device-type gradient-error table BenchResult (worst rel err ~4.7e-6 << 1e-3) with a re-parseable markdown report.
+ACCEPTANCE: PASS — table BenchResult emitted with per-device max-error < 1e-3 (line 4.7e-6, generator 2.8e-8, battery 2.3e-9; test asserts each device type and headline under tol); report file written as a real per-(network,device-type) markdown table that re-parses to an identical result. Full suite: 69 passed; ruff clean.
 VERIFIED: yes

@@ -51,7 +51,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bench_accuracy.py assembling error vs ref_pypsa (1.1) and realized (1.3) as distributions.
   - acceptance:
     - emits a distribution BenchResult on fixtures; --real path parameterized (human) but --synthetic passes in the loop (test asserts synthetic path).
-- [ ] 2.4 Sensitivity-correctness report (ROADMAP §8.4.4) — published per-device-type gradient-error table.
+- [x] 2.4 Sensitivity-correctness report (ROADMAP §8.4.4) — published per-device-type gradient-error table.
   - context: experiments/bench_sensitivity.py wrapping 1.2 into a table.
   - acceptance:
     - table BenchResult with per-device max-error < 1e-3 (test asserts); report file written.

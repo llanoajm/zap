@@ -9,3 +9,5 @@
 [2026-05-29T12:11:53+00:00] THROTTLE: sleep 1800s (1/24) [fast-blank(28s)]
 [2026-05-29T12:45:59+00:00] DONE: - [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
 [2026-05-29T13:16:26+00:00] DONE: - [ ] 2.2 Planning benchmark (ROADMAP §8.4.2) — gradient planner vs baseline on small expansion.
+[2026-05-29T13:24:42+00:00] DONE: - [ ] 2.3 Accuracy benchmark (ROADMAP §8.4.3) — LMP/congestion error distributions vs PyPSA and realized.
+[2026-05-29T13:30:40+00:00] THROTTLE: sleep 1800s (1/24) [fast-blank(58s)]

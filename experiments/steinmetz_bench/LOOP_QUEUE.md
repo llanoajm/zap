@@ -55,7 +55,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bench_sensitivity.py wrapping 1.2 into a table.
   - acceptance:
     - table BenchResult with per-device max-error < 1e-3 (test asserts); report file written.
-- [ ] 2.5 GPU speed via Modal (ROADMAP §8.4.1 headline) — dispatch zap-opf-solver on H100, cache result.
+- [x] 2.5 GPU speed via Modal (ROADMAP §8.4.1 headline) — dispatch zap-opf-solver on H100, cache result.
   - context: experiments/bench_gpu_modal.py calling the EXISTING grid-app/infra/modal/solver_app.py (solve_direct.remote or `modal run ...::smoke`) on a modest + one larger net; run Modal ONCE, cache to data/gpu_runs/<ts>.json. The TEST reads only the cache, never calls Modal. Bounded sizes only (cost guard).
   - acceptance:
     - if `modal` CLI + ~/.modal.toml present: data/gpu_runs/*.json exists with machine=="cuda", an elapsed_s, CPU-vs-GPU objective gap < 1e-2; emits BenchResult.

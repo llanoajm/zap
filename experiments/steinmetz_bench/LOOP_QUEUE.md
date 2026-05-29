@@ -8,7 +8,7 @@ by code from an actual zap solve — never a hand-written constant. Tests must r
 cross-check the number, not merely assert it is present. If you cannot produce a real number on
 synthetic data, mark the item partial and say why — do not fabricate.
 
-- [ ] 0.1 Package skeleton (ROADMAP Phase 0) — create the benchmark package + smoke test.
+- [x] 0.1 Package skeleton (ROADMAP Phase 0) — create the benchmark package + smoke test.
   - context: `experiments/steinmetz_bench/` package with subpkgs datasets/ scoring/ experiments/ reports/ tests/ and an empty data/ (+ .gitignore for __pycache__/.pytest_cache).
   - acceptance:
     - `.venv/bin/python -m pytest experiments/steinmetz_bench/tests -q` collects ≥1 test and the smoke test passes.

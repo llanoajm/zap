@@ -9,9 +9,9 @@
 # (All relative paths below resolve against the repo root, not this script's dir.)
 set -uo pipefail
 
-# Headless `claude -p` multi-turn tool loops 400 on thinking-block replay; disable thinking.
-# (Hard-won from the 2026-05-29 redesign loop — see memory project_redesign_loop.)
-export MAX_THINKING_TOKENS=0
+# Thinking enabled (Opus 4.8 handles headless multi-turn thinking-block replay that
+# tripped 4.7 in the 2026-05-29 redesign loop). Generous budget for the harder items.
+export MAX_THINKING_TOKENS=16000
 # Never let `git push` hang waiting for credentials in this non-interactive process.
 export GIT_TERMINAL_PROMPT=0
 
@@ -22,7 +22,7 @@ JOURNAL=experiments/steinmetz_bench/LOOP_JOURNAL.md
 ALERTS=experiments/steinmetz_bench/LOOP_ALERTS.md
 ATTEMPTS_DIR=experiments/steinmetz_bench/.loop-attempts
 
-MODEL="claude-opus-4-7"
+MODEL="claude-opus-4-8"
 WORK_TIMEOUT=30m
 VERIFY_TIMEOUT=10m
 MAX_ATTEMPTS=5

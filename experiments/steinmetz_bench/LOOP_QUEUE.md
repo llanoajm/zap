@@ -27,7 +27,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: reports/result.py: BenchResult(experiment_id, dataset, headline_number, units, ci, fidelity_band, assumptions, sensitivities).
   - acceptance:
     - BenchResult round-trips to/from JSON (test); a written markdown stub file exists and re-parses.
-- [ ] 1.1 PyPSA LP roundtrip reference (ROADMAP Phase 1) — zap-vs-PyPSA LMP/flow gap on a bundled net.
+- [x] 1.1 PyPSA LP roundtrip reference (ROADMAP Phase 1) — zap-vs-PyPSA LMP/flow gap on a bundled net.
   - context: experiments/ref_pypsa.py solving a bundled net in PyPSA and aligning to zap's solve.
   - acceptance:
     - on a bundled net, max LMP gap < 1e-2 and max flow gap < 1e-3 (test asserts), emits a BenchResult.

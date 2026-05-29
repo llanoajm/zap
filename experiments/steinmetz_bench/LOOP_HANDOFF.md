@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 26)
-- [ ] 0.4 Result schema + report writer (ROADMAP Phase 0) — BenchResult dataclass + JSON + md stub.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 30)
+- [ ] 1.1 PyPSA LP roundtrip reference (ROADMAP Phase 1) — zap-vs-PyPSA LMP/flow gap on a bundled net.
 
 ## Attempt
 1 of 5
@@ -28,6 +28,12 @@
    ACCEPTANCE: <which criteria pass, which don't>
    Do NOT commit experiments/steinmetz_bench/LOOP_HANDOFF.md — the loop owns the bookkeeping commit.
 
+## Result
+STATUS: done
+SUMMARY: Item 1.1 ref_pypsa.py solves a bundled 3-bus radial net in zap (CLARABEL) and PyPSA (HiGHS) from one shared spec; max LMP gap 2.5e-6 $/MWh and max flow gap 4.3e-7 MW, well under the 1e-2 / 1e-3 tolerances, emitting a BenchResult.
+NEXT_STEPS: n/a — proceed to item 1.2 (gradient-vs-exact-dual check). Note for future PyPSA items: zap's importer (load_pypsa_network) is unusable here — its in-place scale_costs `/=` hits read-only Copy-on-Write arrays under pandas 3.0.3 (CoW cannot be disabled), so build zap+PyPSA from one shared param spec instead of round-tripping through the importer.
+ACCEPTANCE: PASS — max LMP gap (2.5e-6) < 1e-2 and max flow gap (4.3e-7) < 1e-3, both re-derived from the raw aligned solve arrays in the test; comparison is non-degenerate (congested corridor separates nodal prices and binds at peak); a reparseable BenchResult is emitted with the LMP gap as its fidelity band. Verify: 27 passed, ruff clean.
+
 ## Constraints
 - SCOPE: only create/edit files under experiments/steinmetz_bench/**. NEVER modify the zap library core (zap/**) or any other experiments/** dir. Benchmarks import zap read-only.
 - PYTHON: run everything via /home/agent/zap/.venv/bin/python. Solver = cvxpy.CLARABEL or SCS (Mosek only if a license is already present). 100-char lines; ruff is configured; attrs @define dataclasses; snake_case modules.
@@ -37,9 +43,4 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
-
-STATUS: done
-SUMMARY: Added reports/result.py BenchResult dataclass with lossless JSON round-trip and a markdown stub writer that embeds and re-parses its canonical JSON.
-ACCEPTANCE: PASS — BenchResult round-trips to/from JSON (test_json_round_trip_is_lossless, optional-fields variant, write_json file read-back); a markdown stub is written and re-parses to an identical result (test_markdown_stub_is_written_and_reparses); parse rejects markdown lacking the JSON block. All 23 tests pass; ruff clean.
-
 VERIFIED: yes

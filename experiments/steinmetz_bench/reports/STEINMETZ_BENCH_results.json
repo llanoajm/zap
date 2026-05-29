@@ -265,36 +265,36 @@
       "timing_table": [
         {
           "baseline_objective": 23982.349062245783,
-          "baseline_s": 0.04860181198455393,
+          "baseline_s": 0.04727373889181763,
           "hours": 24,
           "n_devices": 3,
           "n_nodes": 6,
           "objective_gap": 1.2540392486953916e-11,
-          "speedup_baseline_per_zap": 0.9287077504721727,
+          "speedup_baseline_per_zap": 0.8533613800270504,
           "zap_objective": 23982.34906254653,
-          "zap_s": 0.052332730032503605
+          "zap_s": 0.055397092015482485
         },
         {
           "baseline_objective": 24404.684316503306,
-          "baseline_s": 0.07495900196954608,
+          "baseline_s": 0.06874807900749147,
           "hours": 24,
           "n_devices": 3,
           "n_nodes": 12,
           "objective_gap": 3.6109880384393634e-09,
-          "speedup_baseline_per_zap": 1.152811364164411,
+          "speedup_baseline_per_zap": 1.094129848400352,
           "zap_objective": 24404.68440462833,
-          "zap_s": 0.06502278195694089
+          "zap_s": 0.06283356505446136
         },
         {
           "baseline_objective": 24591.715464306275,
-          "baseline_s": 0.11845628404989839,
+          "baseline_s": 0.14253189705777913,
           "hours": 24,
           "n_devices": 3,
           "n_nodes": 24,
           "objective_gap": 6.920802147702985e-09,
-          "speedup_baseline_per_zap": 1.2162527935693432,
+          "speedup_baseline_per_zap": 1.4851116444385057,
           "zap_objective": 24591.715634500673,
-          "zap_s": 0.09739445999730378
+          "zap_s": 0.09597386000677943
         }
       ]
     },
@@ -348,7 +348,7 @@
         "line_cap": 96.35616031659254
       },
       "planner_objective": 28164.1640625,
-      "planner_solve_seconds": 54.2950390689075,
+      "planner_solve_seconds": 57.602640112047084,
       "savings_vs_no_expansion": 16696.5859375
     },
     "units": "$"

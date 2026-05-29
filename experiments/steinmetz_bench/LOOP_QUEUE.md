@@ -88,7 +88,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: run_all.py building reports/STEINMETZ_BENCH.md with §8.4 tables + §7 headlines, CIs, fidelity bands; --synthetic (loop) / --real (human).
   - acceptance:
     - `python -m experiments.steinmetz_bench.run_all --synthetic` exits 0 and writes a report containing all 10 experiment ids (test asserts each id present).
-- [ ] 5.1 Finished whitepaper (ROADMAP Phase 5) — grounded rewrite of the spec from real loop results.
+- [x] 5.1 Finished whitepaper (ROADMAP Phase 5) — grounded rewrite of the spec from real loop results.
   - context: reports/build_whitepaper.py producing reports/STEINMETZ_WHITEPAPER.md — §7/§8.4 sections replaced with ACTUAL BenchResult numbers (CI + fidelity band, synthetic-vs-real labelled); §5 architecture rewritten grounded in real code (zap.network dispatch+KKT adjoint, PlanningProblem, PowerTarget, ADMMSolver, the zap-opf-solver Modal app incl. its gotchas, opencode harness, grid-app). Also emit reports/grid_app_route/ bundle (md copy + minimal page scaffold) for a human to mount at a gated grid-app route. Do NOT edit grid-app itself.
   - acceptance:
     - a test parses STEINMETZ_WHITEPAPER.md and asserts every benchmark/backtest headline is traceable to a real BenchResult id in the results JSON (no prose number absent from JSON); each cited value carries a CI and fidelity_band; synthetic-vs-real provenance is labelled; the architecture section references real symbols (grep zap.network, PlanningProblem, PowerTarget, ADMMSolver, zap-opf-solver). Build fails if any headline is hand-written rather than data-derived.

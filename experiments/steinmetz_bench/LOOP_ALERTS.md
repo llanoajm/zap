@@ -27,3 +27,4 @@
 [2026-05-29T18:09:38+00:00] PARTIAL: - [ ] 4.1 Fidelity band on every result (ROADMAP Phase 4) — ensure all results carry a fidelity_band. (attempt 1)
 [2026-05-29T19:43:41+00:00] REVERTED: - [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results. (attempt 2)
 [2026-05-29T20:13:48+00:00] PARTIAL: - [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results. (attempt 3)
+[2026-05-29T20:36:19+00:00] DONE: - [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.

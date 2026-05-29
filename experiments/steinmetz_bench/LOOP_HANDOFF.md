@@ -1,8 +1,8 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 87)
-- [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 91)
+- [ ] 5.1 Finished whitepaper (ROADMAP Phase 5) — grounded rewrite of the spec from real loop results.
 
 ## Attempt
-4 of 5
+1 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -38,7 +38,9 @@
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
+## Result
 STATUS: done
-SUMMARY: run_all.py assembles all 10 §8.4/§7 headlines (+3 Phase 1 refs) into STEINMETZ_BENCH.md and its JSON sidecar from real zap solves; --synthetic exits 0 with every headline id present and full suite + ruff green.
-ACCEPTANCE: PASS — `python -m experiments.steinmetz_bench.run_all --synthetic` exits 0 and writes STEINMETZ_BENCH.md (13/13 reporting); report+sidecar contain all 10 headline ids (2.1/2.2/2.3/2.4/2.5 + 3.1/3.2/3.3/3.4/3.5); test_run_all asserts each id present and re-derives every headline from the sidecar BenchResult (anti-demoware); --real blocks via DataNotStagedError; 141 tests pass + ruff clean in ~5m18s, under the 10-min verify budget.
+SUMMARY: Added reports/build_whitepaper.py producing STEINMETZ_WHITEPAPER.md (data-derived §7/§8.4 tables from the BenchResult JSON sidecar + a code-grounded §5 architecture section) plus a ready-to-mount reports/grid_app_route/ bundle, all guarded by a strict anti-demoware test.
+ACCEPTANCE: All pass. test_build_whitepaper.py asserts (a) every results-block headline is re-derived from a real BenchResult id in the JSON sidecar and appears verbatim; (b) no numeric token in any result row is untraceable to that experiment's JSON record; (c) each figure carries a fidelity_band and a real bootstrap CI where stochastic (deterministic accuracy/parity numbers labelled "n/a (deterministic)" rather than given a fabricated CI); (d) synthetic-vs-real provenance labelled on every row; (e) the §5 architecture section cites zap.network, PlanningProblem, PowerTarget, ADMMSolver, zap-opf-solver, each grep-confirmed to exist; (f) the grid_app_route/ bundle (md copy + page.tsx + README) is emitted. Full verify: 149 passed, ruff clean.
+
 VERIFIED: yes

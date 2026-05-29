@@ -59,12 +59,19 @@ def test_synthetic_network_dispatches_and_congestion_separates_prices():
         DatasetSpec(name="tight", kind="synthetic", n_nodes=4, hours=6, congested=True)
     )
 
-    out_free = free.network.dispatch(free.devices, solver=cp.CLARABEL, dual=True)
-    out_tight = tight.network.dispatch(tight.devices, solver=cp.CLARABEL, dual=True)
+    out_free = free.network.dispatch(free.devices, solver=cp.CLARABEL)
+    out_tight = tight.network.dispatch(tight.devices, solver=cp.CLARABEL)
 
-    # Both solve to a finite cost.
+    # Both solve to a finite cost, and the cheap generator actually dispatches
+    # (a degenerate all-curtailed solve would make the price spread meaningless).
     assert np.isfinite(out_free.problem.value)
     assert np.isfinite(out_tight.problem.value)
+    gen_free = np.asarray(out_free.power[0])
+    gen_tight = np.asarray(out_tight.power[0])
+    assert gen_free.sum() > 0
+    assert gen_tight.sum() > 0
+    # Congesting the radial path forces the expensive backstop on, raising cost.
+    assert out_tight.problem.value > out_free.problem.value + 1.0
 
     # LMPs = power-balance duals, shape (num_nodes, hours).
     lmp_free = np.asarray(out_free.prices)

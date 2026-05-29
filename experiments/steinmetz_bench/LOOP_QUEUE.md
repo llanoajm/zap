@@ -39,7 +39,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/realized_lmp.py computing per-node/hour error from a price_frame (synthetic fixture now).
   - acceptance:
     - on a synthetic price_frame fixture, emits an error distribution (mean/median/p90); missing-cache path blocks via DataNotStagedError, not test failure.
-- [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
+- [x] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
   - context: experiments/bench_speed.py timing zap vs cvxpy LP (Mosek if licensed else CLARABEL/ECOS) over >=3 sizes.
   - acceptance:
     - emits a timing table (per size: zap_s, baseline_s, objective_gap); objective_gap < 1e-2 every size (test asserts).

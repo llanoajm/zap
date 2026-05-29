@@ -2,7 +2,7 @@
 - [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
 
 ## Attempt
-1 of 5
+2 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -37,3 +37,8 @@
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
+
+STATUS: done
+SUMMARY: bench_speed.py (2.1) times zap dispatch vs an independent CVXPY LP baseline across 3 synthetic sizes, certifying objective parity (max gap ~7e-9 < 1e-2) and emitting a timing-table BenchResult.
+ACCEPTANCE: PASS — per-size timing table (zap_s, baseline_s, objective_gap) emitted; objective_gap < 1e-2 on every size (test recomputes from raw objectives); report tags WECC/1000-contingency/Modal-H100 headline as human-gated; full verify green (pytest 49 passed, ruff clean).
+VERIFIED: yes

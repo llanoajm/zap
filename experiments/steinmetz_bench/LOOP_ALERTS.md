@@ -25,3 +25,4 @@
 [2026-05-29T17:43:43+00:00] DONE: - [ ] 3.4 Transmission-plan audit backtest (ROADMAP §7.3) — corridor ranking vs realized congestion.
 [2026-05-29T18:07:53+00:00] DONE: - [ ] 3.5 Mexico EPC dual-regime backtest (ROADMAP §7.4) — corridor ranking under merit-order vs CFE>=54%.
 [2026-05-29T18:09:38+00:00] PARTIAL: - [ ] 4.1 Fidelity band on every result (ROADMAP Phase 4) — ensure all results carry a fidelity_band. (attempt 1)
+[2026-05-29T19:43:41+00:00] REVERTED: - [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results. (attempt 2)

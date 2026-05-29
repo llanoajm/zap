@@ -1,0 +1,1201 @@
+{
+  "1.1-pypsa-roundtrip": {
+    "assumptions": {
+      "flow_gap_tol": 0.001,
+      "hours": 6,
+      "lmp_gap_tol": 0.01,
+      "n_lines": 2,
+      "n_nodes": 3,
+      "pypsa_solver": "highs",
+      "topology": "3-bus radial path (bus0-bus1-bus2)",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": null,
+    "dataset": "reference-3bus-radial",
+    "experiment_id": "1.1-pypsa-roundtrip",
+    "fidelity_band": {
+      "max_abs_gap": 2.479194449733768e-06,
+      "mean_abs_gap": 4.5377213147506586e-07,
+      "metric": "lmp",
+      "n": 18,
+      "p90_abs_gap": 6.357504528153868e-07,
+      "reference": "pypsa-dc",
+      "units": "$/MWh"
+    },
+    "headline_number": 2.479194449733768e-06,
+    "sensitivities": {
+      "max_flow_gap_mw": 4.344007322742982e-07,
+      "mean_flow_gap_mw": 2.765131981163904e-07,
+      "objective_rel_gap": 8.625128160659827e-09,
+      "p90_flow_gap_mw": 4.2311127543825935e-07,
+      "pypsa_objective": 10800.0,
+      "zap_objective": 10800.000093151384
+    },
+    "units": "$/MWh"
+  },
+  "1.2-grad-vs-dual": {
+    "assumptions": {
+      "ac_line_note": "nominal_capacity scales both the thermal limit and susceptance, so an AC line's exact gradient includes the power-flow equality dual, not only the thermal -mu term",
+      "active_frac": 0.001,
+      "adjoint_source": "zap DispatchLayer.backward (KKT linear solve)",
+      "dual_source": "device.lagrangian autodiff with CVXPY duals",
+      "fd_rel_tol": 0.01,
+      "grad_rel_tol": 0.001,
+      "identity": "envelope theorem: d(cost*)/d(theta) = dL/d(theta) with solver duals",
+      "networks": {
+        "garver": "6-bus, generator + AC line (paper Fig. 6 system)",
+        "toy7": "7-bus, generator + AC line + multi-period battery"
+      },
+      "solver": "CLARABEL"
+    },
+    "ci": null,
+    "dataset": "garver+toy7",
+    "experiment_id": "1.2-grad-vs-dual",
+    "fidelity_band": {
+      "max_abs_gap": 0.0005572207095809745,
+      "mean_abs_gap": 7.532438319568513e-05,
+      "metric": "cost-gradient",
+      "n": 12,
+      "p90_abs_gap": 0.00011246973921394954,
+      "reference": "exact-dual",
+      "units": "$/unit-capacity"
+    },
+    "headline_number": 4.656003481298551e-06,
+    "sensitivities": {
+      "checks": [
+        {
+          "adjoint_active": [
+            -28.949885008148488,
+            -101.32497386850306,
+            -20.26491070992346,
+            -463.1999998255661,
+            69.48002015875527,
+            -74.30491148719989
+          ],
+          "capacity_dual_active": [
+            -3.9285072111213355e-08,
+            -2.411394935135897e-07,
+            -4.19734774334587e-08,
+            -598.3000000670824,
+            -2.2534690198303467e-07,
+            -5.506572551751824e-08
+          ],
+          "device_type": "line",
+          "exact_dual_active": [
+            -28.9500000497921,
+            -101.32500022799894,
+            -20.265000032523105,
+            -463.2000000704113,
+            69.47999975976879,
+            -74.30500004630693
+          ],
+          "max_abs_gap_inactive": 0.0,
+          "max_rel_err_dual": 4.407727584619603e-06,
+          "max_rel_err_fd": 4.423676089463482e-06,
+          "n_active": 6,
+          "network": "6bus/3dev"
+        },
+        {
+          "adjoint_active": [
+            -284.6000000000004
+          ],
+          "capacity_dual_active": [
+            -284.6000000676416
+          ],
+          "device_type": "generator",
+          "exact_dual_active": [
+            -284.6000000676416
+          ],
+          "max_abs_gap_inactive": 1.3806863145001653e-08,
+          "max_rel_err_dual": 2.3767100252233035e-10,
+          "max_rel_err_fd": 7.227061483270583e-10,
+          "n_active": 1,
+          "network": "6bus/3dev"
+        },
+        {
+          "adjoint_active": [
+            -119.67734074889559,
+            85.94746743223703,
+            -676.9600032406338
+          ],
+          "capacity_dual_active": [
+            -2.5236721270772885e-08,
+            -2.1904584066962778e-08,
+            -775.8811040406374
+          ],
+          "device_type": "line",
+          "exact_dual_active": [
+            -119.67789796960517,
+            85.94746528098023,
+            -676.9600001904246
+          ],
+          "max_abs_gap_inactive": 0.0,
+          "max_rel_err_dual": 4.656003481298551e-06,
+          "max_rel_err_fd": 4.662909357087707e-06,
+          "n_active": 3,
+          "network": "7bus/4dev"
+        },
+        {
+          "adjoint_active": [
+            -39.02321544869657
+          ],
+          "capacity_dual_active": [
+            -39.023214338441136
+          ],
+          "device_type": "generator",
+          "exact_dual_active": [
+            -39.023214338441136
+          ],
+          "max_abs_gap_inactive": 2.7448406810480374e-08,
+          "max_rel_err_dual": 2.845115276384703e-08,
+          "max_rel_err_fd": 2.5622003116762612e-08,
+          "n_active": 1,
+          "network": "7bus/4dev"
+        },
+        {
+          "adjoint_active": [
+            -156.07285714286004
+          ],
+          "capacity_dual_active": [
+            -156.07285751231584
+          ],
+          "device_type": "battery",
+          "exact_dual_active": [
+            -156.07285750870835
+          ],
+          "max_abs_gap_inactive": 0.0,
+          "max_rel_err_dual": 2.3440866908725356e-09,
+          "max_rel_err_fd": 1.3809216063564854e-10,
+          "n_active": 1,
+          "network": "7bus/4dev"
+        }
+      ],
+      "max_rel_err_dual": 4.656003481298551e-06,
+      "max_rel_err_fd": 4.662909357087707e-06,
+      "rel_err_by_device_type": {
+        "battery": 2.3440866908725356e-09,
+        "generator": 2.845115276384703e-08,
+        "line": 4.656003481298551e-06
+      }
+    },
+    "units": "relative"
+  },
+  "1.3-realized-lmp": {
+    "assumptions": {
+      "error_convention": "zap_lmp - realized_lmp per (node, hour)",
+      "hours": 24,
+      "n_nodes": 5,
+      "realized_cost_noise": 0.15,
+      "realized_load_noise": 0.1,
+      "source": "synthetic",
+      "synthetic_note": "realized prices are a second zap solve under seeded load/cost perturbations standing in for ISO-vs-model divergence; a human stages real ISO LMPs and re-runs with --real",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 10.937208836871603,
+      "lo": 7.003195141577047,
+      "mid": 8.757541608209715
+    },
+    "dataset": "synthetic-congested",
+    "experiment_id": "1.3-realized-lmp",
+    "fidelity_band": {
+      "max_abs_gap": 69.44162074417571,
+      "mean_abs_gap": 8.873688650328825,
+      "metric": "lmp",
+      "n": 120,
+      "p90_abs_gap": 10.570648197853492,
+      "reference": "realized-lmp",
+      "units": "$/MWh"
+    },
+    "headline_number": 8.873688650328825,
+    "sensitivities": {
+      "max_abs_error": 69.44162074417571,
+      "mean_abs_error": 8.873688650328825,
+      "mean_signed_error": -0.23236497067697628,
+      "median_abs_error": 5.188443420258199,
+      "p90_abs_error": 10.570648197853492,
+      "per_node_mean_abs_error": [
+        0.5183766370067436,
+        4.6180785117251935,
+        8.847539834923973,
+        13.077254966235449,
+        17.307193301752758
+      ]
+    },
+    "units": "$/MWh"
+  },
+  "2.1-speed-cpu": {
+    "assumptions": {
+      "baseline_kind": "DC-OPF LP built from the same zap device objects",
+      "baseline_solver": "HIGHS",
+      "headline_gating": "CPU synthetic timings only; the WECC / 1000-contingency / Modal-H100 headline is human-gated (see roadmap item 2.5 + human prerequisites)",
+      "objective_gap_tol": 0.01,
+      "sizes": [
+        [
+          6,
+          24
+        ],
+        [
+          12,
+          24
+        ],
+        [
+          24,
+          24
+        ]
+      ],
+      "zap_solver": "CLARABEL"
+    },
+    "ci": null,
+    "dataset": "synthetic-radial-sweep",
+    "experiment_id": "2.1-speed-cpu",
+    "fidelity_band": {
+      "max_abs_gap": 0.00017019439837895334,
+      "mean_abs_gap": 8.620672330531913e-05,
+      "metric": "objective",
+      "n": 3,
+      "p90_abs_gap": 0.00015378052339656278,
+      "reference": "cvxpy-lp",
+      "units": "$"
+    },
+    "headline_number": 6.920802147702985e-09,
+    "sensitivities": {
+      "max_objective_gap": 6.920802147702985e-09,
+      "timing_table": [
+        {
+          "baseline_objective": 23982.349062245783,
+          "baseline_s": 0.03659304906614125,
+          "hours": 24,
+          "n_devices": 3,
+          "n_nodes": 6,
+          "objective_gap": 1.2540392486953916e-11,
+          "speedup_baseline_per_zap": 0.8943658402192538,
+          "zap_objective": 23982.34906254653,
+          "zap_s": 0.04091507906559855
+        },
+        {
+          "baseline_objective": 24404.684316503306,
+          "baseline_s": 0.05751487298402935,
+          "hours": 24,
+          "n_devices": 3,
+          "n_nodes": 12,
+          "objective_gap": 3.6109880384393634e-09,
+          "speedup_baseline_per_zap": 1.0437257919638063,
+          "zap_objective": 24404.68440462833,
+          "zap_s": 0.05510534800123423
+        },
+        {
+          "baseline_objective": 24591.715464306275,
+          "baseline_s": 0.10588373895734549,
+          "hours": 24,
+          "n_devices": 3,
+          "n_nodes": 24,
+          "objective_gap": 6.920802147702985e-09,
+          "speedup_baseline_per_zap": 1.2667382909170066,
+          "zap_objective": 24591.715634500673,
+          "zap_s": 0.08358769898768514
+        }
+      ]
+    },
+    "units": "relative"
+  },
+  "2.2-planning": {
+    "assumptions": {
+      "baseline": "independent joint multi-scenario expansion LP (global optimum f*)",
+      "baseline_solver": "HIGHS",
+      "convexity_note": "DC line used so nominal_capacity scales only the flow limit; the multi-scenario expansion is then jointly convex and the LP optimum is the true global lower bound",
+      "headline_gating": "synthetic two-node multi-scenario case; the large multi-region expansion headline is human-gated",
+      "hours": 8,
+      "levers": [
+        "generator",
+        "dc_line",
+        "battery"
+      ],
+      "n_scenarios": 2,
+      "opt_rel_tol": 0.01,
+      "planner": "zap projected gradient descent (DispatchLayer adjoint)",
+      "snapshot_weight": 1.0,
+      "zap_solver": "CLARABEL"
+    },
+    "ci": null,
+    "dataset": "synthetic-2bus-multiscenario",
+    "experiment_id": "2.2-planning",
+    "fidelity_band": {
+      "max_abs_gap": 34.15471552336021,
+      "mean_abs_gap": 34.15471552336021,
+      "metric": "planning-objective",
+      "n": 1,
+      "p90_abs_gap": 34.15471552336021,
+      "reference": "joint-expansion-lp",
+      "units": "$"
+    },
+    "headline_number": 28164.1640625,
+    "sensitivities": {
+      "baseline_caps": {
+        "battery_cap": 62.07038943739544,
+        "gen_cap": 96.36712136044444,
+        "line_cap": 96.36712136044444
+      },
+      "baseline_objective": 28130.00934697664,
+      "final_proj_grad_norm": 1.4234071037399758,
+      "initial_objective": 44860.75,
+      "n_iterations": 150,
+      "optimality_gap": 0.0012141736286707312,
+      "planner_caps": {
+        "battery_cap": 67.92266396582362,
+        "gen_cap": 96.34446620138054,
+        "line_cap": 96.35616031659254
+      },
+      "planner_objective": 28164.1640625,
+      "planner_solve_seconds": 56.114457843010314,
+      "savings_vs_no_expansion": 16696.5859375
+    },
+    "units": "$"
+  },
+  "2.3-accuracy": {
+    "assumptions": {
+      "congestion_decomposition": "congestion component = LMP - LMP[node 0] per hour; isolates the congestion part of the price from the energy level",
+      "distribution_not_point": "every reference reports mean/median/p90/max |error| + a bootstrap CI, not a single point",
+      "fidelity_band": "DC-vs-PyPSA LMP gap (numerical fidelity floor)",
+      "headline": "mean |LMP error| vs realized (model-vs-reality accuracy)",
+      "references": {
+        "pypsa": "bundled 3-bus radial net, zap CLARABEL vs PyPSA HiGHS (item 1.1)",
+        "realized": "synthetic congested net, zap vs a seeded-perturbation second zap solve standing in for ISO-vs-model divergence (item 1.3); --real swaps in a staged ISO price_frame"
+      },
+      "source": "synthetic",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 10.937208836871603,
+      "lo": 7.003195141577047,
+      "mid": 8.757541608209715
+    },
+    "dataset": "synthetic-multi-reference",
+    "experiment_id": "2.3-accuracy",
+    "fidelity_band": {
+      "max_abs_gap": 2.479194449733768e-06,
+      "mean_abs_gap": 4.5377213147506586e-07,
+      "metric": "lmp",
+      "n": 18,
+      "p90_abs_gap": 6.357504528153868e-07,
+      "reference": "pypsa-dc",
+      "units": "$/MWh"
+    },
+    "headline_number": 8.873688650328825,
+    "sensitivities": {
+      "congestion_vs_pypsa": {
+        "ci_hi": 5.377585461275992e-07,
+        "ci_lo": 1.1272178115362406e-07,
+        "ci_mid": 2.858992100840396e-07,
+        "max_abs_error": 2.2051798822531055e-06,
+        "mean_abs_error": 3.020972230890114e-07,
+        "median_abs_error": 7.705529636581332e-08,
+        "metric": "congestion",
+        "n": 18,
+        "p90_abs_error": 8.682215634436832e-07,
+        "reference": "pypsa-dc",
+        "units": "$/MWh"
+      },
+      "congestion_vs_realized": {
+        "ci_hi": 10.548858332004466,
+        "ci_lo": 6.563719981418487,
+        "ci_mid": 8.34243070323134,
+        "max_abs_error": 69.95999743276796,
+        "mean_abs_error": 8.458987346464518,
+        "median_abs_error": 4.67006688755842,
+        "metric": "congestion",
+        "n": 120,
+        "p90_abs_error": 10.155946882534337,
+        "reference": "realized-lmp",
+        "units": "$/MWh"
+      },
+      "headline_component": "lmp_vs_realized",
+      "lmp_vs_pypsa": {
+        "ci_hi": 6.775658448532339e-07,
+        "ci_lo": 2.836248156285532e-07,
+        "ci_mid": 4.4343323881948197e-07,
+        "max_abs_error": 2.479194449733768e-06,
+        "mean_abs_error": 4.5377213147506586e-07,
+        "median_abs_error": 3.1791446186701933e-07,
+        "metric": "lmp",
+        "n": 18,
+        "p90_abs_error": 6.357504528153868e-07,
+        "reference": "pypsa-dc",
+        "units": "$/MWh"
+      },
+      "lmp_vs_realized": {
+        "ci_hi": 10.937208836871603,
+        "ci_lo": 7.003195141577047,
+        "ci_mid": 8.757541608209715,
+        "max_abs_error": 69.44162074417571,
+        "mean_abs_error": 8.873688650328825,
+        "median_abs_error": 5.188443420258199,
+        "metric": "lmp",
+        "n": 120,
+        "p90_abs_error": 10.570648197853492,
+        "reference": "realized-lmp",
+        "units": "$/MWh"
+      }
+    },
+    "units": "$/MWh"
+  },
+  "2.4-sensitivity": {
+    "assumptions": {
+      "adjoint_source": "zap DispatchLayer.backward (KKT linear solve)",
+      "dual_source": "device.lagrangian autodiff with CVXPY duals",
+      "headline": "worst relative gradient error across all device types",
+      "identity": "d(cost*)/d(theta) = dL/d(theta) with solver duals",
+      "networks": {
+        "garver": "6-bus, generator + AC line (paper Fig. 6 system)",
+        "toy7": "7-bus, generator + AC line + multi-period battery"
+      },
+      "per_device_tol": 0.001,
+      "solver": "CLARABEL",
+      "wraps": "item 1.2 grad-vs-dual check (envelope-theorem identity)"
+    },
+    "ci": null,
+    "dataset": "garver+toy7",
+    "experiment_id": "2.4-sensitivity",
+    "fidelity_band": {
+      "max_abs_gap": 0.0005572207095809745,
+      "mean_abs_gap": 7.532438319568513e-05,
+      "metric": "cost-gradient",
+      "n": 12,
+      "p90_abs_gap": 0.00011246973921394954,
+      "reference": "exact-dual",
+      "units": "$/unit-capacity"
+    },
+    "headline_number": 4.656003481298551e-06,
+    "sensitivities": {
+      "headline_number": 4.656003481298551e-06,
+      "rel_err_by_device_type": {
+        "battery": 2.3440866908725356e-09,
+        "generator": 2.845115276384703e-08,
+        "line": 4.656003481298551e-06
+      },
+      "table": [
+        {
+          "attr": "nominal_capacity",
+          "device_type": "line",
+          "max_rel_err_dual": 4.407727584619603e-06,
+          "max_rel_err_fd": 4.423676089463482e-06,
+          "n_active": 6,
+          "network": "6bus/3dev"
+        },
+        {
+          "attr": "nominal_capacity",
+          "device_type": "generator",
+          "max_rel_err_dual": 2.3767100252233035e-10,
+          "max_rel_err_fd": 7.227061483270583e-10,
+          "n_active": 1,
+          "network": "6bus/3dev"
+        },
+        {
+          "attr": "nominal_capacity",
+          "device_type": "line",
+          "max_rel_err_dual": 4.656003481298551e-06,
+          "max_rel_err_fd": 4.662909357087707e-06,
+          "n_active": 3,
+          "network": "7bus/4dev"
+        },
+        {
+          "attr": "nominal_capacity",
+          "device_type": "generator",
+          "max_rel_err_dual": 2.845115276384703e-08,
+          "max_rel_err_fd": 2.5622003116762612e-08,
+          "n_active": 1,
+          "network": "7bus/4dev"
+        },
+        {
+          "attr": "power_capacity",
+          "device_type": "battery",
+          "max_rel_err_dual": 2.3440866908725356e-09,
+          "max_rel_err_fd": 1.3809216063564854e-10,
+          "n_active": 1,
+          "network": "7bus/4dev"
+        }
+      ]
+    },
+    "units": "relative"
+  },
+  "2.5-gpu-modal": {
+    "assumptions": {
+      "cpu_solver": "CLARABEL",
+      "dispatch_timestamp": "20260529T135404Z",
+      "gpu_admm_args": {
+        "atol": 1e-08,
+        "dtype": "float64",
+        "num_iterations": 5000,
+        "rho_angle": 1.0,
+        "rho_power": 1.0,
+        "rtol": 1e-08
+      },
+      "gpu_solver": "ADMMSolver (zap-opf-solver Modal app, H100)",
+      "headline_gating": "bounded synthetic sizes only; the full WECC / 1000-contingency H100 headline stays a human-gated run (see roadmap prerequisites)",
+      "objective_gap_tol": 0.01,
+      "parity_method": "re-evaluate zap operation_cost at the GPU's returned dispatch and compare to the exact CPU LP optimum"
+    },
+    "ci": null,
+    "dataset": "synthetic-pypsa-gpu",
+    "experiment_id": "2.5-gpu-modal",
+    "fidelity_band": {
+      "max_abs_gap": 0.22723551653325558,
+      "mean_abs_gap": 0.12175392418248521,
+      "metric": "objective",
+      "n": 2,
+      "p90_abs_gap": 0.20613919806310152,
+      "reference": "modal-gpu-admm",
+      "units": "$"
+    },
+    "headline_number": 1.652535623416256e-06,
+    "sensitivities": {
+      "gpu_table": [
+        {
+          "cpu_elapsed_s": 0.058573000016622245,
+          "cpu_objective": 21087.164095860095,
+          "gpu_elapsed_s": 4.651675462722778,
+          "gpu_objective": 21087.147823528263,
+          "gpu_tier": "H100",
+          "hours": 8,
+          "machine": "cuda",
+          "n_buses": 6,
+          "network": "modest",
+          "objective_gap": 7.71669995915168e-07
+        },
+        {
+          "cpu_elapsed_s": 0.056522289058193564,
+          "cpu_objective": 137507.18188059138,
+          "gpu_elapsed_s": 6.749706268310547,
+          "gpu_objective": 137507.4091161079,
+          "gpu_tier": "H100",
+          "hours": 8,
+          "machine": "cuda",
+          "n_buses": 14,
+          "network": "larger",
+          "objective_gap": 1.652535623416256e-06
+        }
+      ],
+      "max_objective_gap": 1.652535623416256e-06
+    },
+    "units": "relative"
+  },
+  "3.1-datacenter-siting": {
+    "assumptions": {
+      "dc_mw": 80.0,
+      "default_node": 0,
+      "fidelity_band": "DC-vs-PyPSA nodal-LMP gap on the nominal scenario at the default and recommended placements (both curtailment-free, so the two LPs are identical and the band is the solver-vs-solver floor)",
+      "headline": "effective $/MWh at the default node minus the recommended node, paired per scenario-hour",
+      "hours": 24,
+      "n_candidates": 4,
+      "n_scenarios": 8,
+      "pypsa_solver": "highs",
+      "ranking_key": "ascending effective $/MWh (mean of the nodal LMP duration curve), tie-broken by curtailment frequency",
+      "source": "synthetic",
+      "synthetic_note": "fuel costs carry seeded per-hour noise and loads a per-scenario scale; a human stages real node price/load history and re-runs with --real",
+      "topology": "star: cheap hub generator + radial tie lines to candidates",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 50.469101707644384,
+      "lo": 49.614848609030616,
+      "mid": 50.04448331464563
+    },
+    "dataset": "synthetic-siting-star",
+    "experiment_id": "3.1-datacenter-siting",
+    "fidelity_band": {
+      "max_abs_gap": 0.010000487480402498,
+      "mean_abs_gap": 0.006999840743205832,
+      "metric": "lmp",
+      "n": 240,
+      "p90_abs_gap": 0.009999984016220154,
+      "reference": "pypsa-dc",
+      "units": "$/MWh"
+    },
+    "headline_number": 50.03788174646971,
+    "sensitivities": {
+      "default_curtailment_frequency": 0.0,
+      "default_effective_price": 60.003180350890936,
+      "per_node": {
+        "0": {
+          "curtailment_frequency": 0.0,
+          "effective_price": 60.003180350890936,
+          "max": 69.92090677270748,
+          "p50": 59.624434009627365,
+          "p90": 64.94744973988237,
+          "p95": 66.24780203030869
+        },
+        "1": {
+          "curtailment_frequency": 0.0,
+          "effective_price": 79.94440766232653,
+          "max": 91.86769091117009,
+          "p50": 79.98103024230903,
+          "p90": 85.55357803300507,
+          "p95": 86.68927373611217
+        },
+        "2": {
+          "curtailment_frequency": 0.0,
+          "effective_price": 9.965298604421228,
+          "max": 11.54145438984727,
+          "p50": 9.98356909802864,
+          "p90": 10.718451917866087,
+          "p95": 10.830125058389536
+        },
+        "3": {
+          "curtailment_frequency": 0.484375,
+          "effective_price": 520.2389215665136,
+          "max": 999.99999990259,
+          "p50": 77.9007052331603,
+          "p90": 999.9999994101996,
+          "p95": 999.9999995505584
+        }
+      },
+      "ranking": [
+        2,
+        0,
+        1,
+        3
+      ],
+      "recommended_curtailment_frequency": 0.0,
+      "recommended_effective_price": 9.965298604421228,
+      "recommended_node": 2
+    },
+    "units": "$/MWh"
+  },
+  "3.2-datacenter-flex": {
+    "assumptions": {
+      "battery_capital_cost_per_mw_yr": 50000.0,
+      "battery_duration_h": 4.0,
+      "break_even_definition": "battery MW where annual marginal value (zap adjoint -d(op cost)/d(power capacity)) crosses the annualized capital cost",
+      "days_per_year": 365,
+      "dc_mw": 30.0,
+      "dispatch": "QP (quadratic generation cost) so prices vary smoothly with load",
+      "flex_weight": 5.0,
+      "headline": "mean annual system-cost saving from serving the data center as a flexible PowerTarget vs. a firm Load, paired per seeded scenario",
+      "n_scenarios": 16,
+      "source": "synthetic",
+      "synthetic_note": "generator fuel costs carry seeded per-hour noise and the background load a per-scenario scale; a human stages real ISO price/load history and re-runs with --real",
+      "topology": "single node: capacity-limited baseload + peaker, QP costs",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 3630734.7991587594,
+      "lo": 3368414.651670879,
+      "mid": 3510742.7440539887
+    },
+    "dataset": "synthetic-flex-qp",
+    "experiment_id": "3.2-datacenter-flex",
+    "fidelity_band": {
+      "max_abs_gap": 0.0048022139081354,
+      "mean_abs_gap": 0.001212459482975703,
+      "metric": "battery-marginal-value",
+      "n": 10,
+      "p90_abs_gap": 0.002853263034219821,
+      "reference": "finite-difference",
+      "units": "$/MW-day"
+    },
+    "headline_number": 3512050.195928692,
+    "sensitivities": {
+      "annual_marginal_value": [
+        72695.49714950292,
+        71748.39932429066,
+        54441.50302558856,
+        53963.4528536376,
+        53524.21170901774,
+        36786.0079778549,
+        36576.28817731477,
+        36156.94793242196,
+        35571.07433955722,
+        34698.57012092325
+      ],
+      "battery_capital_cost_per_mw_yr": 50000.0,
+      "battery_sizes_mw": [
+        4.0,
+        8.0,
+        12.0,
+        16.0,
+        20.0,
+        25.0,
+        30.0,
+        40.0,
+        55.0,
+        80.0
+      ],
+      "break_even_battery_mw": 21.052744895934214,
+      "daily_marginal_value": [
+        199.1657456150765,
+        196.57095705285113,
+        149.15480280983166,
+        147.8450763113359,
+        146.6416759151171,
+        100.78358350097233,
+        100.20900870497196,
+        99.06013132170399,
+        97.45499819056774,
+        95.06457567376233
+      ],
+      "fd_marginal_value_daily": [
+        199.16635448898887,
+        196.57359376578825,
+        149.15509678030503,
+        147.84586478126585,
+        146.63687370120897,
+        100.78489712977898,
+        100.20781107596122,
+        99.05993610227597,
+        97.45500729986816,
+        95.06429690663936
+      ],
+      "firm_daily_cost": [
+        66279.41558848828,
+        105204.69248923621,
+        106058.41674782726,
+        112273.29274025944,
+        102751.43438694527,
+        95050.13689354967,
+        112867.80437538009,
+        81064.47960908902,
+        98566.36847415386,
+        106829.52618693758,
+        77829.95222596059,
+        94813.00991815524,
+        104042.40924867113,
+        81403.30236121401,
+        106037.20283744468,
+        96554.13235455124
+      ],
+      "firm_vs_flexible_savings_per_yr": [
+        2775994.013497821,
+        3742720.0648592836,
+        3877279.8096165755,
+        3844736.6069411403,
+        3470716.5448329146,
+        3392003.587453414,
+        3845097.244119614,
+        3043477.4315503,
+        3633391.7479766263,
+        3712496.447521801,
+        3194740.060618587,
+        3505278.184316548,
+        3684713.7628523028,
+        3111946.699570361,
+        3801366.9839549796,
+        3556843.9451768016
+      ],
+      "flex_daily_cost": [
+        58673.95253780932,
+        94950.66491427927,
+        95435.73233791883,
+        101739.76778973576,
+        93242.62193534824,
+        85756.97637997867,
+        102333.2913777921,
+        72726.1852760745,
+        88611.87053449187,
+        96658.30304304224,
+        69077.23973111514,
+        85209.50804331538,
+        93947.30304907578,
+        72877.42099252809,
+        95622.4987718146,
+        86809.35442256
+      ],
+      "gradient_max_rel_err_fd": 3.2749019990159594e-05,
+      "marginal_value_at_break_even_per_yr": 50000.0,
+      "net_value_per_yr": [
+        92775.23029125814,
+        181608.9711875748,
+        261112.06639564573,
+        277889.62337958324,
+        292863.0584452462,
+        268440.797990741,
+        201845.52470798953,
+        65512.694260754855,
+        -146635.4498387603,
+        -518276.25184648903
+      ],
+      "optimal_battery_mw": 20.0
+    },
+    "units": "$/yr"
+  },
+  "3.3-utility-sced": {
+    "assumptions": {
+      "actual_dispatch": "uncoordinated self-scheduling: inter-zonal lines throttled to 0% of rating (islanded), a feasible but non-optimal point of the SCED problem",
+      "binding_corridor": "zone1-zone2 (z12), thermal-limited below peak transfer",
+      "days_per_year": 365,
+      "expansion_ranking": "candidates ranked by 5-year NPV of avoided fuel from a +40 MW bump, discount 7%",
+      "fleet": "one generator per zone, cheap->expensive outward",
+      "headline": "mean annual avoided fuel = (actual islanded cost - SCED cost) * days_per_year, paired per seeded scenario",
+      "hours": 24,
+      "lmp_gap_tol": 0.01,
+      "n_scenarios": 16,
+      "pypsa_solver": "highs",
+      "source": "synthetic",
+      "synthetic_note": "generator fuel costs carry seeded per-hour noise and loads a per-scenario scale; a human stages a real fleet/load/topology and re-runs with --real",
+      "topology": "3-zone radial path (zone0-zone1-zone2)",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 47680099.9411582,
+      "lo": 47193984.631163575,
+      "mid": 47443342.432300255
+    },
+    "dataset": "synthetic-utility-3zone",
+    "experiment_id": "3.3-utility-sced",
+    "fidelity_band": {
+      "max_abs_gap": 0.00016625431756267517,
+      "mean_abs_gap": 6.99566161031938e-06,
+      "metric": "lmp",
+      "n": 72,
+      "p90_abs_gap": 5.0691623762588715e-06,
+      "reference": "pypsa-dc",
+      "units": "$/MWh"
+    },
+    "headline_number": 47436828.05843817,
+    "sensitivities": {
+      "actual_daily_cost": [
+        243778.23444581122,
+        240004.76537258693,
+        202800.23937330523,
+        205366.65648620029,
+        221246.11379060525,
+        246270.27208726527,
+        209826.36281188542,
+        224226.4977881416,
+        202140.86538645523,
+        285619.7466160813,
+        220509.31690504347,
+        245401.40381643325,
+        217832.0600140029,
+        264461.61613159225,
+        246671.92358065522,
+        201665.9717582242
+      ],
+      "avoided_per_yr": [
+        48377404.203124754,
+        47710285.21239551,
+        46847865.7237973,
+        46372981.94065868,
+        47860092.40977702,
+        48090241.62303723,
+        46799425.30399311,
+        47521107.36612652,
+        46977645.94404183,
+        48132355.906402186,
+        47503390.99349699,
+        47835308.83423131,
+        47118346.69949604,
+        47773242.1403279,
+        47725540.95423426,
+        46344013.679869995
+      ],
+      "best_project": "expand-z12",
+      "expansion_ranking": [
+        {
+          "avoided_per_yr": 6131979.1076245485,
+          "capital_cost": 250000.0,
+          "delta_mw": 40.0,
+          "kind": "line",
+          "name": "expand-z12",
+          "npv": 24892325.014366385
+        },
+        {
+          "avoided_per_yr": 4262925.838264883,
+          "capital_cost": 250000.0,
+          "delta_mw": 40.0,
+          "kind": "line",
+          "name": "expand-z01",
+          "npv": 17228837.591688417
+        },
+        {
+          "avoided_per_yr": 0.5592977369815344,
+          "capital_cost": 900000.0,
+          "delta_mw": 40.0,
+          "kind": "generator",
+          "name": "expand-gen0",
+          "npv": -899997.7067688529
+        }
+      ],
+      "mean_actual_daily": 229863.87789776808,
+      "mean_sced_daily": 99899.96540889639,
+      "npv_delta_best_project_usd": 24892325.014366385,
+      "pypsa_cost_rel_gap": 4.8865047934028677e-08,
+      "pypsa_sced_cost": 99808.83317640531,
+      "sced_daily_cost": [
+        111237.40101259272,
+        109291.65520164031,
+        74449.92232180579,
+        78317.39089535459,
+        90122.57294190107,
+        114516.18544880711,
+        81608.75923930155,
+        94031.6830864251,
+        73434.98608771048,
+        153750.27837936295,
+        90363.04021053117,
+        114345.76317470364,
+        88740.6991934658,
+        133576.0212265843,
+        115917.01685672575,
+        74696.07126542968
+      ],
+      "zap_sced_cost": 99808.83805356873
+    },
+    "units": "$/yr"
+  },
+  "3.4-transmission-audit": {
+    "assumptions": {
+      "bottleneck_corridor": "hub-z5",
+      "bottleneck_definition": "most-throttled spoke carrying the dearest backup; relieving it displaces the most expensive energy, so it has the highest marginal value by construction",
+      "ex_ante_signal": "corridor marginal value = -d(system cost)/d(spoke nominal_capacity) from zap's dispatch adjoint on the noise-free forecast day",
+      "fd_eps_mw": 0.01,
+      "headline": "R^2 of the linear fit between the ex-ante marginal-value vector and the realized congestion-rent vector across corridors",
+      "high_value_frac": 0.5,
+      "hours": 24,
+      "n_scenarios": 24,
+      "rank_corr_tol": 0.6,
+      "realized_signal": "congestion rent = sum_t |LMP_sink - LMP_source| * flow per corridor, averaged over seeded realized days (nodal prices + flows only, no gradients)",
+      "source": "synthetic",
+      "synthetic_note": "backup fuel costs carry seeded per-hour noise and loads a per-day scale (the forecast-vs-realized gap); a human stages a real RTEP/MTEP vintage + approved-project list and re-runs with --real",
+      "topology": "radial hub-and-spokes: 1 cheap hub + 6 load zones, one corridor each",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": 0.9446936910494749,
+      "lo": 0.9149267119093426,
+      "mid": 0.929704129303382
+    },
+    "dataset": "synthetic-radial-corridors",
+    "experiment_id": "3.4-transmission-audit",
+    "fidelity_band": {
+      "max_abs_gap": 0.012584647688413497,
+      "mean_abs_gap": 0.0036453710640955705,
+      "metric": "corridor-marginal-value",
+      "n": 4,
+      "p90_abs_gap": 0.009195301424335868,
+      "reference": "finite-difference",
+      "units": "$/MW-day"
+    },
+    "headline_number": 0.9305639414684014,
+    "sensitivities": {
+      "active_mask": [
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ],
+      "bottleneck_identified": true,
+      "bottleneck_zone": 5,
+      "corridor_names": [
+        "hub-z0",
+        "hub-z1",
+        "hub-z2",
+        "hub-z3",
+        "hub-z4",
+        "hub-z5"
+      ],
+      "ex_ante_ranking": [
+        "hub-z5",
+        "hub-z4",
+        "hub-z3",
+        "hub-z2",
+        "hub-z1",
+        "hub-z0"
+      ],
+      "fd_marginal_value_per_mw_day": [
+        null,
+        null,
+        953.4424181445502,
+        1829.0724802936893,
+        2549.073785287328,
+        3509.0718066174304
+      ],
+      "gradient_max_rel_err_fd": 1.3199169083439661e-05,
+      "marginal_value_per_mw_day": [
+        1.764293103458527e-11,
+        4.935849696140344e-11,
+        953.4550027922386,
+        1829.0724984603423,
+        2549.07249846052,
+        3509.072498460537
+      ],
+      "missed_corridor_count": 0,
+      "r_squared": 0.9305639414684014,
+      "rank_correlation_spearman": 1.0,
+      "realized_congestion_rent_per_day": [
+        0.041808538852244594,
+        2925.2901956070327,
+        71969.8353290548,
+        105166.01581929339,
+        127135.09412834198,
+        140633.04389039753
+      ],
+      "top_corridor": 5
+    },
+    "units": "R2"
+  },
+  "3.5-mexico-epc": {
+    "assumptions": {
+      "cfe_share_floor": 0.54,
+      "fd_eps_mw": 0.01,
+      "headline": "ranking agreement = Spearman rank-correlation between the merit-order and CFE-mandate corridor marginal-value vectors (low/negative => the rule reorders which corridors are worth expanding)",
+      "hours_per_year": 8760.0,
+      "ranking_signal": "corridor marginal value = -d(system cost)/d(nominal_capacity); merit-order value from zap's exact adjoint (FD-certified), CFE-regime value from the same finite difference on the mandate-constrained re-solve",
+      "regime_cfe": "same DC-OPF + mandate sum(CFE gen) >= 0.54 * sum(total gen), added directly to zap's model_dispatch_problem constraint list",
+      "regime_merit": "unconstrained least-cost DC-OPF (historical merit order)",
+      "source": "synthetic",
+      "synthetic_note": "CFE is dearer than private, so merit order under-dispatches it and the share mandate binds; a human stages a real CENACE PML history + PRODESEN corridor list and re-runs with --real",
+      "topology": "two hubs (cheap private @node0, dearer CFE @node1) feeding 4 load zones over 8 controllable DC corridors (one private + one CFE corridor per zone)",
+      "zap_solver": "CLARABEL"
+    },
+    "ci": {
+      "confidence": 0.9,
+      "hi": -0.5365853658536586,
+      "lo": -0.9746835443037977,
+      "mid": -0.8292682926829269
+    },
+    "dataset": "synthetic-two-hub-cfe",
+    "experiment_id": "3.5-mexico-epc",
+    "fidelity_band": {
+      "max_abs_gap": 0.00013174707144791853,
+      "mean_abs_gap": 9.746499733509495e-05,
+      "metric": "corridor-marginal-value",
+      "n": 4,
+      "p90_abs_gap": 0.00013059373357524607,
+      "reference": "finite-difference",
+      "units": "$/MW-period"
+    },
+    "headline_number": -0.8571428571428572,
+    "sensitivities": {
+      "cfe_generation_increase_mwh": 35.99999378415362,
+      "cfe_mandate_cost_increase": 443.1199204394052,
+      "cfe_marginal_value_per_mw": [
+        -1.0884787116083317e-05,
+        -3.6206893128110096e-05,
+        -0.00014346096577355638,
+        0.00015291711861209478,
+        2.7300347937853076e-05,
+        1.000003577382813,
+        1.999910489666945,
+        3.00011278486636
+      ],
+      "cfe_ranking": [
+        "cfe-z3",
+        "cfe-z2",
+        "cfe-z1",
+        "priv-z3",
+        "cfe-z0",
+        "priv-z0",
+        "priv-z1",
+        "priv-z2"
+      ],
+      "cfe_share_cfe": 0.5400000009836816,
+      "cfe_share_merit": 0.450000016525384,
+      "congestion_relief_per_mw_year_cfe": [
+        -0.09535073513688985,
+        -0.31717238380224444,
+        -1.256718060176354,
+        1.3395539590419503,
+        0.23915104793559294,
+        8760.031337873443,
+        17519.21588948244,
+        26280.987995429314
+      ],
+      "congestion_relief_per_mw_year_merit": [
+        111251.99985247958,
+        102491.99985247836,
+        93731.99985245986,
+        84971.9998524621,
+        -6.047596009298859e-10,
+        -1.9938929285002645e-09,
+        -2.0696796651188456e-08,
+        -1.8379402802475882e-08
+      ],
+      "corridor_names": [
+        "priv-z0",
+        "priv-z1",
+        "priv-z2",
+        "priv-z3",
+        "cfe-z0",
+        "cfe-z1",
+        "cfe-z2",
+        "cfe-z3"
+      ],
+      "gradient_max_rel_err_fd": 1.318601016696556e-05,
+      "is_cfe_corridor": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ],
+      "mandate_binding": true,
+      "mandate_shadow_price_per_mw": 14.140000076830502,
+      "max_nodal_price_shift": 6.91559974711361,
+      "merit_active_mask": [
+        1,
+        1,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "merit_adjoint_per_mw": [
+        12.699999983159769,
+        11.69999998315963,
+        10.699999983157518,
+        9.699999983157774,
+        -6.90364841244162e-14,
+        -2.276133480023133e-13,
+        -2.362648019542061e-12,
+        -2.0981053427483883e-12
+      ],
+      "merit_fd_per_mw": [
+        12.700048089027405,
+        11.700131730231078,
+        10.699917878719134,
+        9.699872080545902,
+        null,
+        null,
+        null,
+        null
+      ],
+      "merit_marginal_value_per_mw": [
+        12.699999983159769,
+        11.69999998315963,
+        10.699999983157518,
+        9.699999983157774,
+        -6.90364841244162e-14,
+        -2.276133480023133e-13,
+        -2.362648019542061e-12,
+        -2.0981053427483883e-12
+      ],
+      "merit_ranking": [
+        "priv-z0",
+        "priv-z1",
+        "priv-z2",
+        "priv-z3",
+        "cfe-z0",
+        "cfe-z1",
+        "cfe-z3",
+        "cfe-z2"
+      ],
+      "ranking_agreement_spearman": -0.8571428571428572,
+      "system_cost_cfe": 7901.120092735609,
+      "system_cost_merit": 7458.000172296204
+    },
+    "units": "spearman"
+  }
+}

@@ -55,24 +55,27 @@ PHASE_1_3_MODULES = [
 ]
 
 
-def _produce_results():
-    """Run every Phase 1-3 experiment once and return the BenchResults produced.
+def _produce_results(bench_results):
+    """Validate and return the non-null BenchResults from the shared session collection.
 
-    Modules whose ``run()`` returns ``None`` (only the cache-gated GPU benchmark,
-    and only when no Modal dispatch has been cached) contribute no result.
+    ``bench_results`` (see ``conftest.py``) maps ``EXPERIMENT_ID -> BenchResult | None``
+    and is produced once per session by running every experiment's synthetic entrypoint.
+    Modules whose result is ``None`` (only the cache-gated GPU benchmark, and only when no
+    Modal dispatch has been cached) contribute no result.
     """
+    id_to_module = {module.EXPERIMENT_ID: module for module in PHASE_1_3_MODULES}
     results = {}
-    for module in PHASE_1_3_MODULES:
-        result = module.run()
+    for experiment_id, result in bench_results.items():
+        module = id_to_module[experiment_id]
         if result is None:
             assert module is bench_gpu_modal, (
-                f"{module.__name__}.run() returned None; only the cache-gated GPU "
+                f"{module.__name__} produced None; only the cache-gated GPU "
                 "benchmark may legitimately produce no result"
             )
             continue
         assert isinstance(result, BenchResult)
-        assert result.experiment_id == module.EXPERIMENT_ID
-        results[result.experiment_id] = result
+        assert result.experiment_id == experiment_id
+        results[experiment_id] = result
     return results
 
 
@@ -90,8 +93,8 @@ def _assert_well_formed(band: FidelityBand):
     assert band.max_abs_gap >= band.mean_abs_gap
 
 
-def test_every_phase_1_3_result_has_a_well_formed_fidelity_band():
-    results = _produce_results()
+def test_every_phase_1_3_result_has_a_well_formed_fidelity_band(bench_results):
+    results = _produce_results(bench_results)
     # All synthetic (non-GPU) experiments must have produced a result.
     assert len(results) >= len(PHASE_1_3_MODULES) - 1
     for experiment_id, result in results.items():
@@ -101,9 +104,9 @@ def test_every_phase_1_3_result_has_a_well_formed_fidelity_band():
         _assert_well_formed(result.fidelity_band)
 
 
-def test_fidelity_band_survives_json_roundtrip():
+def test_fidelity_band_survives_json_roundtrip(bench_results):
     """The band is preserved (not silently dropped) through the JSON schema."""
-    results = _produce_results()
+    results = _produce_results(bench_results)
     for result in results.values():
         recovered = BenchResult.from_json(result.to_json())
         assert recovered.fidelity_band is not None

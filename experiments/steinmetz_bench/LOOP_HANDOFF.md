@@ -1,8 +1,8 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 83)
-- [ ] 4.1 Fidelity band on every result (ROADMAP Phase 4) — ensure all results carry a fidelity_band.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 87)
+- [ ] 4.2 Master report generator (ROADMAP Phase 4) — run_all.py assembling all results.
 
 ## Attempt
-2 of 5
+3 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -28,11 +28,6 @@
    ACCEPTANCE: <which criteria pass, which don't>
    Do NOT commit experiments/steinmetz_bench/LOOP_HANDOFF.md — the loop owns the bookkeeping commit.
 
-## Result
-STATUS: done
-SUMMARY: Item 4.1 — added a DC-vs-PyPSA nodal-LMP fidelity_band to the siting backtest (3.1, previously the only Phase 1-3 result with fidelity_band=None; band max ~0.01 $/MWh over 240 real zap-vs-PyPSA prices) and tests/test_fidelity_bands.py that runs every Phase 1-3 experiment and asserts each BenchResult carries a present, well-formed, JSON-roundtrip-safe fidelity_band.
-ACCEPTANCE: All pass. The new test iterates all Phase 1-3 results (1.1-3.5; GPU 2.5 included via its cached run) and asserts fidelity_band is non-null and well-formed (non-empty reference/metric, n>0, finite non-negative gaps with max>=p90 and max>=mean); bands are computed from real solves, not constants. Full verify green: 133 passed in 413s, ruff clean.
-
 ## Constraints
 - SCOPE: only create/edit files under experiments/steinmetz_bench/**. NEVER modify the zap library core (zap/**) or any other experiments/** dir. Benchmarks import zap read-only.
 - PYTHON: run everything via /home/agent/zap/.venv/bin/python. Solver = cvxpy.CLARABEL or SCS (Mosek only if a license is already present). 100-char lines; ruff is configured; attrs @define dataclasses; snake_case modules.
@@ -42,4 +37,3 @@ ACCEPTANCE: All pass. The new test iterates all Phase 1-3 results (1.1-3.5; GPU 
 - BOOKKEEPING: do not edit LOOP_QUEUE.md or loop.sh. You may overwrite LOOP_HANDOFF.md status fields only; the loop owns all bookkeeping commits.
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
-VERIFIED: yes

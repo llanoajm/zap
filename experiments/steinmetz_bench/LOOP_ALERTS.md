@@ -7,3 +7,4 @@
 [2026-05-29T12:10:10+00:00] DONE: - [ ] 1.3 Realized-LMP comparator (ROADMAP Phase 1) — zap-vs-realized LMP error distribution.
 [2026-05-29T12:11:20+00:00] PARTIAL: - [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes. (attempt 1)
 [2026-05-29T12:11:53+00:00] THROTTLE: sleep 1800s (1/24) [fast-blank(28s)]
+[2026-05-29T12:45:59+00:00] DONE: - [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.

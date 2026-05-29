@@ -1,8 +1,8 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 42)
-- [ ] 2.1 Speed benchmark CPU (ROADMAP §8.4.1) — zap vs cvxpy baseline across sizes.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 46)
+- [ ] 2.2 Planning benchmark (ROADMAP §8.4.2) — gradient planner vs baseline on small expansion.
 
 ## Attempt
-2 of 5
+1 of 5
 
 ## Context to load before working
 - experiments/steinmetz_bench/BENCH_ROADMAP.md   (THE roadmap — full per-item spec, acceptance criteria, guardrails, the synthetic-first design principle; READ THIS FIRST and find your current item)
@@ -39,6 +39,6 @@
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
 STATUS: done
-SUMMARY: bench_speed.py (2.1) times zap dispatch vs an independent CVXPY LP baseline across 3 synthetic sizes, certifying objective parity (max gap ~7e-9 < 1e-2) and emitting a timing-table BenchResult.
-ACCEPTANCE: PASS — per-size timing table (zap_s, baseline_s, objective_gap) emitted; objective_gap < 1e-2 on every size (test recomputes from raw objectives); report tags WECC/1000-contingency/Modal-H100 headline as human-gated; full verify green (pytest 49 passed, ruff clean).
+SUMMARY: bench_planning.py (2.2) pits zap's gradient expansion planner against an independent jointly-convex multi-scenario expansion LP/QP and certifies the planner converges to within ~2.5e-3 of the global optimum across gen+line+battery levers.
+ACCEPTANCE: PASS planner final objective <= baseline + tol (test_planner_reaches_global_optimum: opt gap ~1.2e-3 at hours=8, ~2.5e-3 at the hours=4 test cfg, both < OPT_REL_TOL=1e-2, re-derived from raw objectives); PASS converges within a fixed iteration budget (diminishing-step schedule, n_iterations asserted == schedule sum); PASS timing recorded in BenchResult (planner_solve_seconds > 0 asserted); PASS anti-demoware cross-check (LP per-scenario op cost == zap dispatch at fixed caps); PASS multi-scenario (n_scenarios>=2) + 3 levers with an interior optimum; full suite 56 passed, ruff clean.
 VERIFIED: yes

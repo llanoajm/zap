@@ -43,7 +43,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bench_speed.py timing zap vs cvxpy LP (Mosek if licensed else CLARABEL/ECOS) over >=3 sizes.
   - acceptance:
     - emits a timing table (per size: zap_s, baseline_s, objective_gap); objective_gap < 1e-2 every size (test asserts).
-- [ ] 2.2 Planning benchmark (ROADMAP §8.4.2) — gradient planner vs baseline on small expansion.
+- [x] 2.2 Planning benchmark (ROADMAP §8.4.2) — gradient planner vs baseline on small expansion.
   - context: experiments/bench_planning.py: gradient planner vs brute/implicit-diff baseline, multi-scenario, gen+line+battery caps.
   - acceptance:
     - planner final objective <= baseline + tol (test asserts); converges within a fixed iteration budget; timing recorded in BenchResult.

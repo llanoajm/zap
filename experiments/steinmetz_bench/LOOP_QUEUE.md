@@ -80,7 +80,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
   - context: experiments/bt_mexico_epc.py: rank corridors under (a) merit-order and (b) CFE->=54%-share dispatch constraint; ranking agreement + congestion-relief $/yr.
   - acceptance:
     - both regimes produce rankings; the CFE constraint is demonstrably binding (prices/dispatch shift measurably between regimes — test asserts a measurable shift); a ranking-agreement metric is emitted.
-- [ ] 4.1 Fidelity band on every result (ROADMAP Phase 4) — ensure all results carry a fidelity_band.
+- [x] 4.1 Fidelity band on every result (ROADMAP Phase 4) — ensure all results carry a fidelity_band.
   - context: every BenchResult from Phases 1-3 carries a non-null fidelity_band (DC-vs-PyPSA, DC-vs-realized where applicable).
   - acceptance:
     - a test iterates all produced results and asserts fidelity_band present and well-formed.

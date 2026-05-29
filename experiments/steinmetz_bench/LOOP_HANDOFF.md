@@ -1,5 +1,5 @@
-## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 11)
-- [ ] 0.1 Package skeleton (ROADMAP Phase 0) — create the benchmark package + smoke test.
+## Current item (from experiments/steinmetz_bench/LOOP_QUEUE.md line 17)
+- [ ] 0.2 Dataset registry + loaders (ROADMAP Phase 0) — resolve a DatasetSpec to a zap network + frames.
 
 ## Attempt
 1 of 5
@@ -38,8 +38,7 @@
 - CROSS-REPO: do not edit the grid-app or opencode repos. Item 5.1 produces the whitepaper + grid_app_route/ bundle as ARTIFACTS inside experiments/steinmetz_bench/ only — mounting into grid-app is a human step.
 - COMMITS: conventional-commit messages (e.g. feat(bench): ...). One queue item per iteration; keep changes minimal and additive.
 
-## Result
 STATUS: done
-SUMMARY: Scaffolded the experiments/steinmetz_bench package (datasets/scoring/experiments/reports/tests subpkgs + data/README) with a passing smoke test.
-ACCEPTANCE: PASS — pytest collects 3 tests and all pass; ruff clean; data/README.md exists; data/ contents git-ignored except the README (a !data/ negation overrides the repo-root `data` ignore so the README is committable).
+SUMMARY: Dataset registry resolves a DatasetSpec to a zap network+devices+time index via synthetic/builtin/cache kinds, with a real solving+price-separating synthetic generator and DataNotStagedError on empty cache.
+ACCEPTANCE: PASS — synthetic 5-node net asserts gen=2/load=1/line=4 device counts and (1,24) load shape; Garver builtin asserts 3 gen/5 load/15 line; congestion test dispatches under CLARABEL and asserts tight-line price spread > free; missing-cache raises DataNotStagedError naming the dir. All 9 tests pass, ruff clean.
 VERIFIED: yes

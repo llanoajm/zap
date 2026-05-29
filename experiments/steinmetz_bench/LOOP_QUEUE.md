@@ -14,7 +14,7 @@ synthetic data, mark the item partial and say why — do not fabricate.
     - `.venv/bin/python -m pytest experiments/steinmetz_bench/tests -q` collects ≥1 test and the smoke test passes.
     - `.venv/bin/ruff check experiments/steinmetz_bench` is clean.
     - `data/README.md` exists explaining what a human stages there.
-- [ ] 0.2 Dataset registry + loaders (ROADMAP Phase 0) — resolve a DatasetSpec to a zap network + frames.
+- [x] 0.2 Dataset registry + loaders (ROADMAP Phase 0) — resolve a DatasetSpec to a zap network + frames.
   - context: datasets/registry.py: synthetic generator (n_nodes, hours, congested, seed) wrapping toy/Garver importers + cache loaders reading data/<name>/.
   - acceptance:
     - test loads a synthetic 5-node net and the Garver net; asserts expected device counts/shapes.

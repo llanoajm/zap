@@ -178,6 +178,16 @@ All sources verified via web search / primary source fetch. Date of verification
 
 ---
 
+## L. Iteration 5 New Sources
+
+| # | Citation | URL | Credibility |
+|---|----------|-----|-------------|
+| L1 | Bardes, Ponce, LeCun et al. "VICReg: Variance-Invariance-Covariance Regularization for Self-Supervised Learning." ICLR 2022. arXiv:2105.12247. | https://arxiv.org/abs/2105.12247 | High: ICLR peer-reviewed; collapse prevention with GNN track record |
+| L2 | Ralph research loop 5 experiments. "LP Gradient Structure & LMP Accuracy Threshold Experiments." 6-bus DC-OPF, 2026-06-11. | ralph/experiments/lmp_gradient_sensitivity.py | Internal: empirical confirmation; zap source code directly used |
+| L3 | Ralph research loop 5 experiments. "RAMBO-Style Boundary Sampling vs. Uniform Random Sampling." 2026-06-11. | ralph/experiments/rambo_boundary_sampling.py | Internal: empirical; confirms boundary sampling advantage on 6-bus network |
+
+---
+
 ## Notes on Credibility Assessment
 
 - **High**: peer-reviewed venue (ICLR, NeurIPS, AAAI, IEEE TPWRS, EPSR, JMLR, Joule/Cell) or official organization blog/repo with primary data

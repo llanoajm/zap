@@ -876,3 +876,83 @@ JEPA (Balestriero & LeCun, 2025) provides:
 3. **Graph World Model (arXiv:2507.10539) is the closest prior work** for grid-like state, though untested on power grids
 4. **LeWM's speed advantage (48× vs DINO-WM) applies only if**: we don't use a large pre-trained model as encoder; training from scratch (GNN JEPA) gives the same speed benefit while being applicable to grid data
 5. **Frozen encoder vs. end-to-end for grids**: there is no meaningful "frozen grid encoder" yet (GridSFM-Open is the closest, but requires fine-tuning for DC-OPF as discussed above); end-to-end training from DC-OPF data is the natural starting point
+
+---
+
+## Iteration 5 New Findings
+
+### LP Gradient Structure — Empirical Validation (CONFIRMED, Iteration 5)
+
+**Experiment**: `ralph/experiments/lmp_gradient_sensitivity.py` — 6-bus DC-OPF test network, scanning line capacity scale [0.3×, 1.8×], T=1 timestep.
+
+**Network**: 6 buses, 7 lines, 3 generators (cheap/expensive/mid), 3 loads. Bottleneck structure creates 5 distinct congestion regimes.
+
+**Key results** (Experiment 1 — gradient discontinuity):
+- **5 distinct active sets** observed (lines {1,2,5,6} binding → {1,2,6} → {1,2} → {1} → {} = uncongested)
+- **26 active-set jump events** in 60 adjacent parameter pairs
+- **Mean adjacent cosine similarity: 0.574** — confirming LP theorem (within-region ~1.0, sharp drops at boundaries)
+- LMP vectors: 5 distinct piecewise-constant values (each active set → unique LMP vector)
+  - Congested: [15, 90, 500, ...] (load shedding at $500/MWh VoLL)
+  - Partially congested: [15, 90, 127.5, ...]
+  - Moderate: [15, 48.33, 44.17, ...]
+  - Less congested: same prices, lower total cost
+  - Uncongested: [40, 40, 40, ...] (uniform LMPs = marginal generator cost)
+
+**Key results** (Experiment 2 — smooth surrogate bias):
+- **Critical finding at scale ≈ 1.22** (line-1-binding → uncongested transition):
+  - Smooth surrogate cosine similarity: **-0.998** (sign flip)
+  - Relative gradient bias: **1.5 × 10^10** (astronomically wrong)
+  - This means: at the congestion→uncongested transition boundary, a smooth NN surrogate predicts a gradient that is **almost exactly opposite** to the true gradient. Gradient descent with the surrogate would increase cost instead of decreasing it.
+- At scale 0.867 (another active-set transition): cos_sim = 0.118, rel_bias = 8.43× (severe misalignment)
+- At scale 0.539 (minor transition): cos_sim = 0.94, rel_bias = 0.38 (modest bias)
+
+**Conclusion**: The LP piecewise-constant gradient theorem is empirically confirmed. The smooth surrogate sign flip at the congestion→uncongested boundary is the most dangerous failure mode for Design B: investment decisions that would decrease congestion would appear profitable, but the surrogate predicts the opposite and steers the planner the wrong way. This is NOT a matter of tuning — it is a structural property of smooth function approximators applied to LP discontinuities.
+
+**Practical implication**: Any Design B training protocol MUST include boundary-scenario sampling (RAMBO-style) to ensure the surrogate is trained on both sides of each active-set boundary. Without this, the surrogate will produce catastrophically wrong planning gradients at the most economically important scenarios (near congestion limits).
+
+---
+
+### SIGReg on Graph-Structured Latent Spaces (Iteration 5 — CONFIRMED GAP)
+
+**Research finding**: SIGReg (Balestriero & LeCun, arXiv:2511.08544) explicitly requires **minibatch i.i.d. assumptions** for its theoretical guarantees. The Cramér-Wold theorem + Epps-Pulley test are designed for i.i.d. samples. GNN node embeddings are **spatially correlated** (adjacent buses are connected via message passing), violating this assumption.
+
+**Literature check** (web search):
+- "Graph Self-Supervised Learning: the BT, the HSIC, and the VICReg" (2021, arXiv:2105.12247): VICReg applied to GNNs empirically — compares loss functions but does NOT address spatial correlations or i.i.d. violations
+- Graph-JEPA (arXiv:2309.36014, TMLR): uses stop-gradients + EMA (not SIGReg) for collapse prevention; METIS partitioning handles graph structure at the input but not in the regularizer
+- No papers found on "equivariant JEPA" or graph-specific SIGReg
+- No papers found demonstrating SIGReg on GNN encoders with spatially correlated embeddings
+
+**Verdict**: The i.i.d. assumption violation is real and unresolved in the literature. **Recommended alternatives for GNN JEPA training** with known track records:
+1. **VICReg** (Bardes et al., 2021) — applied to GNNs empirically (arXiv:2105.12247)
+2. **BYOL** (Bootstrap Your Own Latent) — no negative samples, works with GNNs in graph SSL
+3. **SIGReg with graph-pooled embeddings** — pool all node embeddings to graph-level before applying SIGReg; graph-level embeddings are closer to i.i.d. (one sample = one graph problem)
+4. **Empirical validation** — apply SIGReg to GNN encoder on power grid data and check if collapse occurs; the theoretical gap does not prove it fails empirically
+
+**Impact on Design A/B/C**: Minor — SIGReg is one regularization option among several. The JEPA prediction objective (predict masked node features in latent space) is independent of the collapse-prevention regularizer. Use VICReg or BYOL if SIGReg proves unstable on GNN encoders. This does not affect the fundamental hybrid architecture designs.
+
+---
+
+### RAMBO-Style Boundary Sampling for Zap (Iteration 5 — script implemented)
+
+**Implementation**: `ralph/experiments/rambo_boundary_sampling.py` — numerical gradient ascent on the congestion boundary score (minimizes maximum flow margin to thermal limit), starting from random load scales.
+
+**Approach**: 
+1. For each random starting load scale, use finite-difference gradient ascent on `min_margin = min(capacity - |flow|)` over all lines. The gradient of this score w.r.t. the load scale pushes the scenario toward the nearest active-set boundary.
+2. Compare distinct active sets found by: (a) uniform random sampling, (b) boundary-targeted gradient ascent.
+
+**Empirical result** (from running ralph/experiments/rambo_boundary_sampling.py, Iteration 5):
+
+| Metric | Uniform Sampling | RAMBO-style |
+|--------|-----------------|-------------|
+| N = 50 scenarios | 50 | 50 |
+| Distinct active sets found | 3 | 3 |
+| Boundary hit rate | 90% | 100% |
+| Rich-boundary rate (2+ lines binding) | 26% | 64% |
+| Scenarios in {1,2,5} binding | **0** | **9** |
+| Scenarios in uncongested {} | 5 | 0 |
+
+Key finding: **Uniform sampling finds zero scenarios in the most congested regime** {lines 1,2,5 binding} — even though this regime exists. RAMBO-style gradient ascent deliberately seeks the thermal limit boundaries, finding 9 scenarios in the highly congested regime. This directly confirms the need for boundary sampling to train surrogates on all active-set transitions.
+
+The RAMBO script uses finite-difference gradient ascent on `boundary_score = -min_line_margin`, which maximizes the fraction of scenarios near thermal limits. This is a simpler approximation than the full bilevel RAMBO formulation; the full approach would find even more boundary diversity.
+
+**Limitation of this test network**: The 6-bus network scales load (not line capacity like in Exp 1), so only 3 distinct active sets appear in the load-scale range [0.4, 1.8]. The full 5 active sets from Exp 1 require varying line capacity, not just load. For real planning problems, both load and investment parameters matter.

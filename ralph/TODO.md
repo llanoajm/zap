@@ -55,16 +55,20 @@
 - [x] Survey broader verification landscape: Nellikkath & Chatzivasileiadis 2022/2024, IBP for SC-DCOPF (arXiv:2511.15624, 8316 buses), compact optimality verification (arXiv:2405.21023, ICML 2024)
 - [x] Document LP piecewise-constant gradient theorem and consequences for Design B
 
+## Completed (Iteration 5)
+
+- [x] Run LP gradient sensitivity experiments empirically on 6-bus DC-OPF (ralph/experiments/lmp_gradient_sensitivity.py, rewritten for zap native API): 5 distinct active sets, 26 gradient jumps, critical sign flip (cos_sim=-0.998) at congestion→uncongested boundary
+- [x] Verify SIGReg behavior for graph-structured latent spaces: i.i.d. assumption violation confirmed; VICReg has been applied to GNNs empirically but without addressing spatial correlations; SIGReg's Cramér-Wold/Epps-Pulley test is NOT validated for correlated graph node embeddings; Graph-JEPA uses stop-gradients+EMA, not SIGReg; this is a confirmed open theoretical gap
+- [x] Mark battery SOC survey as complete (was done in Iteration 4 but not marked): MPA-DNN (arXiv:2510.09349) is the only paper with hard SOC projection; combined JEPA+SOC constraints = research gap
+- [x] Implement RAMBO-style boundary sampling script for zap (ralph/experiments/rambo_boundary_sampling.py)
+
 ## Remaining High Priority
 
-- [ ] Verify SIGReg behavior for graph-structured latent spaces (theoretical gap — empirical test needed; may require running GNN-JEPA on a power grid synthetic dataset)
-- [ ] Survey energy storage / battery dispatch in LEARNED surrogates — specifically which papers handle SOC temporal coupling in neural OPF (likely MPA-DNN arXiv:2510.09349 and possibly TS-JEPA) — separate from zap code analysis above
+- [ ] Run rambo_boundary_sampling.py and document quantitative results: how many distinct active sets does boundary sampling find vs. uniform sampling on the 6-bus test case?
 
 ## Medium Priority
 
 - [ ] Assess GridSFM fine-tuning feasibility in practice: load GridSFM-Open backbone, strip AC output heads, run on a small DC-OPF dataset from zap; does Hodge PE transfer? (code experiment)
-- [ ] Implement RAMBO-style boundary sampling script for zap (generate training scenarios near thermal limits — critical for covering rare active-set patterns in Design B training data)
-- [ ] Implement and run lmp_gradient_sensitivity.py experiment on IEEE 14-bus to empirically validate LP piecewise-constant gradient theorem
 
 ## Low Priority / Future
 

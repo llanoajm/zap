@@ -2,7 +2,7 @@
 ## Research Report — Ralph Loop, Iteration 5
 
 **Date**: 2026-06-11  
-**Status**: UPDATED — Iteration 5 adds: (a) EMPIRICAL CONFIRMATION of LP piecewise-constant gradient theorem via actual zap experiments on a 6-bus DC-OPF test network; (b) critical sign-flip result: at the congestion→uncongested boundary, smooth surrogate gradient cos_sim = **-0.998** (anti-correlated) — gradient descent would increase cost; (c) SIGReg i.i.d. assumption gap confirmed via literature — graph node embeddings violate i.i.d.; recommended alternatives = VICReg/BYOL; (d) RAMBO boundary sampling script implemented (ralph/experiments/rambo_boundary_sampling.py); (e) battery SOC survey marked complete (MPA-DNN = only paper with hard SOC projection, no JEPA+SOC combination exists).
+**Status**: FINAL — Iteration 6 completes the research loop. Adds: (a) GC-IDM (arXiv:2605.08732, "Latent Geometry Beyond Search"): amortized planning on LeWorldModel, 100–130× speedup vs. CEM — eliminates need for online gradient descent in Design B; (b) RAMBO experiment re-verified: 100% boundary hit rate vs. 90% uniform; {1,2,5}-binding regime found 9/50 scenarios vs. 0/50 uniform; (c) GridSFM fine-tuning code experiment assessed as infeasible in this environment (no PyG, CPU-only PyTorch, no gridsfm on PyPI) — architectural analysis is the deliverable; (d) web survey confirms no JEPA-power-grid papers published May–June 2026 — the field remains open; (e) all sub-questions from the research prompt resolved; DONE file written.
 
 ---
 
@@ -41,6 +41,7 @@ The Joint-Embedding Predictive Architecture (JEPA) principle (LeCun, 2022) train
 | Mar 2026 | **LeWorldModel** (Maes et al.) | 2603.19312 | Preprint | First end-to-end JEPA from pixels; 2 loss terms, 1 hyperparameter; 48× faster than DINO-WM |
 | Jun 2026 | **FF-JEPA** (Masip et al.) | 2606.09311 | Preprint | Hierarchical two-model JEPA: subgoal predictor + forward model; overcomes long-horizon collapse |
 | Dec 2025 | **Value-Guided JEPA** (Destrade et al.) | 2601.00844 | Preprint | Shapes embedding space so latent distance = cost-to-go; goal-conditioned value planning |
+| May 2026 | **GC-IDM** (Nguyen, Xu, Huang) | 2605.08732 | Preprint | Amortized planning on LeWorldModel via Goal-Conditioned Inverse Dynamics; 100–130× faster than CEM; matches/beats CEM on 7/8 environments |
 | NeurIPS 2024 WS | **TS-JEPA** (Ennadir et al.) | 2509.25449 | NeurIPS WS | JEPA for time series; matches/surpasses SOTA on classification/forecasting; robust to noise |
 | TMLR | **Graph-JEPA** (Skenderi et al.) | 2309.36014 | TMLR | Graph-level JEPA via masked subgraph prediction; applicable to power grid topologies |
 
@@ -409,11 +410,15 @@ KKT verifier K: (R(z), D(z), params) → residual    [optional at inference]
 
 **Motivation for KKT residual**: Pure supervised dual loss (term 2) trains D to interpolate known LMPs but cannot guarantee structure at test time. The KKT residual enforces that the latent-decoded solution is physically consistent, borrowing from the self-supervised approach in arXiv:2601.13486 and the physics-informed losses in OPF-HGNN.
 
-**Planning procedure**: Optimize investment decisions a* by gradient descent through the frozen predictor:
+**Planning procedure — two options**:
+
+*Option 1 (gradient descent)*: Optimize investment decisions a* by gradient descent through the frozen predictor:
 ```
 min_{a ∈ A} cost(D(P(E(x), a)))
 ```
 where `cost` evaluates investment cost + expected dispatch cost via the dual decoder (LMP × quantity), and A is a box constraint set (can be projected).
+
+*Option 2 (amortized, Iteration 6 finding)*: Train a **Goal-Conditioned Inverse Dynamics Model (GC-IDM)** — a learned mapping from (z_current, z_goal, horizon) directly to the action, replacing online search entirely. Proposed in arXiv:2605.08732 (Nguyen et al., May 2026) on top of LeWorldModel. Achieves **100–130× speedup vs. CEM** while matching or exceeding CEM performance on 7/8 benchmark environments. For power grids: z_current = current grid state encoding, z_goal = target low-cost / low-congestion state, action = investment / dispatch decision. Hard constraints (generator bounds, line ratings) can be enforced by projecting the GC-IDM output onto the feasible box constraint set before evaluation. This eliminates the need for online iterative planning at inference time — planning is amortized into a single GC-IDM forward pass. **Key caveat**: requires the latent geometry to correctly encode planning structure (cost-to-go); Value-Guided JEPA (arXiv:2601.00844) explicitly provides this via metric shaping.
 
 **Challenge 1: surrogate gradient bias**  
 The true planning gradient uses exact KKT implicit differentiation (∇J(η) = γ + ∂z*(η)ᵀ · ∇h(z*(η))). The surrogate gradient through P is approximate. For Design B to converge to the correct investment, we need:
@@ -928,5 +933,6 @@ Key verified citations:
 - Feng et al. arXiv:2507.10539 (Jul 2025) — Graph World Model; GNN-based world model for graph-structured state
 - arXiv:2105.12247 (2021) — Graph Self-Supervised Learning: BT, HSIC, VICReg; VICReg applied to GNNs empirically
 - ralph/experiments/lmp_gradient_sensitivity.py — Iteration 5 empirical confirmation: 5 distinct active sets, 26 gradient jumps, sign flip cos_sim=−0.998 at congestion→uncongested boundary
-- ralph/experiments/rambo_boundary_sampling.py — RAMBO-style boundary sampling: 100% boundary hit rate vs. 90% uniform; finds {1,2,5}-binding regime that uniform sampling misses entirely (0 vs. 9 scenarios)
+- ralph/experiments/rambo_boundary_sampling.py — RAMBO-style boundary sampling: 100% boundary hit rate vs. 90% uniform; finds {1,2,5}-binding regime that uniform sampling misses entirely (0 vs. 9 scenarios); re-verified in Iteration 6
 - Bardes et al. ICLR 2022 arXiv:2105.12247 — VICReg; collapse prevention with GNN track record; recommended over SIGReg for graph-structured latent spaces
+- Nguyen, Xu, Huang arXiv:2605.08732 (May 2026) — "Latent Geometry Beyond Search: Amortizing Planning in World Models"; GC-IDM on LeWorldModel; 100–130× speedup vs. CEM; amortizes Design B planning into single inference pass

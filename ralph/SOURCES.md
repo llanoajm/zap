@@ -30,6 +30,7 @@ All sources verified via web search / primary source fetch. Date of verification
 | B9 | Masip, Swinnen, Hu, Detry, Tuytelaars. "FF-JEPA: Long-Horizon Planning in World Models with Latent Planners." arXiv:2606.09311. Jun 2026. | https://arxiv.org/html/2606.09311v1 | Medium: preprint; full abstract verified; hierarchical subgoal + forward model |
 | B12 | Ennadir, Golkar, Sarra. "Joint Embeddings Go Temporal." arXiv:2509.25449. NeurIPS 2024 Workshop "Time Series in the Age of Large Models." | https://arxiv.org/abs/2509.25449 | High: NeurIPS workshop; full abstract verified; JEPA for time series; matches/surpasses SOTA |
 | B13 | Skenderi, Li, Tang, Cristani. "Graph-level Representation Learning with Joint-Embedding Predictive Architectures." TMLR. arXiv:2309.36014. | https://arxiv.org/abs/2309.36014 | High: TMLR peer-reviewed; full abstract verified; masked subgraph prediction; code public |
+| B14 | Nguyen, Xu, Huang. "Latent Geometry Beyond Search: Amortizing Planning in World Models." arXiv:2605.08732. May–Jun 2026. | https://arxiv.org/abs/2605.08732 | Medium-High: preprint; builds on LeWorldModel; GC-IDM 100–130× speedup vs CEM; abstract and results verified |
 | B10 | Meta AI blog: "V-JEPA 2: World model benchmarks." Jun 2025. | https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/ | High: official Meta AI blog |
 | B11 | Meta AI blog: "I-JEPA: AI model learns the world more like humans do." Jun 2023. | https://ai.meta.com/blog/yann-lecun-ai-model-i-jepa/ | High: official Meta AI blog |
 

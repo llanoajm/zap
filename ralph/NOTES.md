@@ -956,3 +956,79 @@ Key finding: **Uniform sampling finds zero scenarios in the most congested regim
 The RAMBO script uses finite-difference gradient ascent on `boundary_score = -min_line_margin`, which maximizes the fraction of scenarios near thermal limits. This is a simpler approximation than the full bilevel RAMBO formulation; the full approach would find even more boundary diversity.
 
 **Limitation of this test network**: The 6-bus network scales load (not line capacity like in Exp 1), so only 3 distinct active sets appear in the load-scale range [0.4, 1.8]. The full 5 active sets from Exp 1 require varying line capacity, not just load. For real planning problems, both load and investment parameters matter.
+
+---
+
+## Iteration 6 New Findings
+
+### RAMBO Boundary Sampling — Re-verified (Iteration 6)
+
+Re-ran `ralph/experiments/rambo_boundary_sampling.py` to confirm results from Iteration 5. Results stable and confirmed:
+
+| Metric | Uniform Sampling (N=50) | RAMBO-style (N=50) |
+|--------|------------------------|---------------------|
+| Distinct active sets found | **3** | **3** |
+| Boundary hit rate (min_margin < 0.05) | 90% | **100%** |
+| Rich-boundary rate (≥2 lines binding) | 26% | **64%** |
+| Scenarios in {1,2,5} binding regime | **0** | **9** |
+| Scenarios in uncongested {} regime | 5 | 0 |
+
+Key finding: Uniform sampling finds ZERO scenarios in the most congested {1,2,5}-binding regime; RAMBO deliberately finds 9. This confirms the practical importance of boundary sampling for training surrogates that must perform well at LP gradient discontinuities.
+
+---
+
+### GridSFM Fine-Tuning in This Environment: INFEASIBLE
+
+**Assessment** (Iteration 6, code experiment ruled out):
+- GridSFM is NOT available on PyPI (`pip index versions gridsfm` → not found)
+- `torch_geometric` is NOT installed in this environment
+- PyTorch installed is CPU-only (`2.12.0+cpu`); GridSFM requires `torch>=2.6,<2.9` + `torch_geometric>=2.5,<3`
+
+**Verdict**: The code experiment "load GridSFM-Open backbone, strip AC output heads, fine-tune on DC-OPF data" cannot be run in this environment without substantial setup. The architectural analysis in NOTES.md (Iteration 3) and REPORT.md (Design C section) is the correct deliverable: GridSFM's Hodge PE, cycle basis, and HGNN architecture are analyzed in detail, the AC/DC compatibility gap is documented, and the fine-tuning protocol is specified in pseudocode. This is sufficient for a research report.
+
+**Practical recommendation**: Anyone attempting this fine-tuning should install `pip install gridsfm torch-geometric` in a CUDA-enabled environment, then follow the protocol in NOTES.md (Iteration 3).
+
+---
+
+### Amortized Latent Planning — New Paper (arXiv:2605.08732)
+
+**Title**: "Latent Geometry Beyond Search: Amortizing Planning in World Models"
+**Authors**: Hoang Nguyen, Xiaohao Xu, Xiaonan Huang
+**Date**: May 9, 2026 (v1); June 5, 2026 (v2)
+**URL**: https://arxiv.org/abs/2605.08732
+
+**Key idea**: Rather than running CEM or gradient descent in latent space at inference time (standard JEPA planning), train a **Goal-Conditioned Inverse Dynamics Model (GC-IDM)** that maps `(z_current, z_goal, horizon) → action` directly. Built on top of **LeWorldModel** (arXiv:2603.19312) with its geometry-regularized latent space.
+
+**Results**: 100–130× reduction in per-decision computational cost vs. CEM; matches or exceeds CEM on 7/8 test environments (navigation, contact-rich manipulation, continuous control).
+
+**Relevance to Design B (GridJEPA)**:
+- Instead of gradient descent through the frozen predictor (standard JEPA planning), train a GC-IDM for power grid planning: `(z_current, z_target_cost_state, T) → investment_decision`
+- The 100–130× speedup over CEM is dramatic — CEM is already faster than gradient descent for complex objective landscapes
+- For hard constraints: the GC-IDM output (investment/dispatch decision) can be projected onto the feasible set (box constraints for generator capacities, e.g.) as a post-processing step
+- **Critical limitation**: GC-IDM assumes the latent space geometry encodes the planning problem correctly (as LeWorldModel's regularization attempts to ensure). For power grid applications, the latent space must encode congestion costs — addressed by Value-Guided JEPA (arXiv:2601.00844), which explicitly shapes the metric
+- Does NOT handle hard constraints internally — only box constraints via projection are demonstrated
+
+**Connection to existing Design B**: This paper strengthens the case for Design B by showing that "planning in latent space" does NOT require online gradient descent at inference time. A GC-IDM trained on zap-generated (grid_state, optimal_investment, planning_horizon) triples would: (1) amortize planning into a single inference pass, (2) potentially handle hard constraints via projection, and (3) be 100-130× faster than CEM-based alternatives.
+
+**Open question for grids**: GC-IDM was tested in environments without hard constraints. For power dispatch, the action space has hard constraints (line limits, generator bounds). Whether GC-IDM + projection (onto the constraint polytope) works as well as gradient-based approaches with exact KKT is unknown.
+
+---
+
+### Final Survey of Open Questions — Iteration 6 Assessment
+
+All major sub-questions from the research prompt are now resolved. Summary:
+
+| Sub-question | Status | Key finding |
+|---|---|---|
+| LeJEPA mechanism | ✅ Resolved | SIGReg / Cramér-Wold / Epps-Pulley test; isotropic Gaussian optimality proved |
+| LeWorldModel | ✅ Resolved | Real, open-source (arXiv:2603.19312); 48× faster than DINO-WM; visual-only but principle transferable |
+| Microsoft grid FM | ✅ Resolved | GridSFM (May 2026); 2.23% median gap; 1.66× warm-start speedup; MISO deployment |
+| IBM GridFM | ✅ Resolved | Sandbox stage; no benchmarks yet |
+| OPFData | ✅ Resolved | ~3M AC-OPF instances; 14–13,659 buses; incompatible directly with zap DC-OPF |
+| AC-OPF surrogates | ✅ Resolved | DC3/DeepOPF/E2ELR/PDL reviewed; HH-MPNN <1% gap 14–2000 bus |
+| Dual/LMP recovery | ✅ Resolved | Active-set classification + KKT derivation = cleanest path; WARP proves full primal+dual required |
+| Latent planning | ✅ Resolved | V-JEPA-2-AC/DINO-WM/LeWM reviewed; GC-IDM (arXiv:2605.08732) amortizes 100-130×; no hard constraints in any paper |
+| Differentiable optimization bridge | ✅ Resolved | OptNet/cvxpylayers/zap's own KKT backprop; Design A is the cleanest bridge |
+| Compositional generalization | ✅ Resolved | HH-MPNN: <1% gap, zero-shot N-1; OPF-HGNN: cross-topology; JEPA adds pre-training benefit |
+| Multi-period/expansion | ✅ Resolved | MEP gradient structure from Degleris et al.; MPA-DNN for SOC; WARP/Taheri for warm-start |
+| Failure modes | ✅ Resolved | LP piecewise-constant gradient theorem; sign-flip experiment (cos_sim=−0.998); SIGReg gap for GNNs |

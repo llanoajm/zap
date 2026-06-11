@@ -30,6 +30,7 @@ push_with_retry() {
 
 echo "=== ralph loop started $(date -u +%FT%TZ) | max_iters=$MAX_ITERS ===" >>"$LOG_DIR/loop.log"
 
+fast_fails=0
 for i in $(seq 1 "$MAX_ITERS"); do
     if [[ -f "$DONE_FILE" ]]; then
         echo "DONE sentinel found before iter $i; stopping." >>"$LOG_DIR/loop.log"
@@ -37,21 +38,29 @@ for i in $(seq 1 "$MAX_ITERS"); do
     fi
 
     echo "--- iter $i start $(date -u +%FT%TZ) ---" >>"$LOG_DIR/loop.log"
-    claude -p "$(cat "$PROMPT")" \
+    iter_start=$(date +%s)
+    # IS_SANDBOX=1: containerized environment, allows skip-permissions under root.
+    IS_SANDBOX=1 claude -p "$(cat "$PROMPT")" \
         --dangerously-skip-permissions \
         >"$LOG_DIR/iter_${i}.log" 2>&1
     status=$?
-    echo "--- iter $i exit=$status $(date -u +%FT%TZ) ---" >>"$LOG_DIR/loop.log"
+    iter_secs=$(( $(date +%s) - iter_start ))
+    echo "--- iter $i exit=$status duration=${iter_secs}s $(date -u +%FT%TZ) ---" >>"$LOG_DIR/loop.log"
 
     # Safety net: commit anything the agent left uncommitted, then push progress.
     git add ralph/ >/dev/null 2>&1
     git diff --cached --quiet || git commit -m "ralph: iter $i progress" >>"$LOG_DIR/loop.log" 2>&1
     push_with_retry
 
-    # If the CLI itself is failing (auth/network), don't burn iterations.
-    if [[ $status -ne 0 && ! -s "$LOG_DIR/iter_${i}.log" ]]; then
-        echo "claude CLI produced no output and failed; aborting loop." >>"$LOG_DIR/loop.log"
-        break
+    # If the CLI itself is failing (auth/root/network), don't burn iterations.
+    if [[ $status -ne 0 && $iter_secs -lt 30 ]]; then
+        fast_fails=$((fast_fails + 1))
+        if [[ $fast_fails -ge 2 ]]; then
+            echo "ABORT: $fast_fails consecutive sub-30s failures; CLI is broken." >>"$LOG_DIR/loop.log"
+            break
+        fi
+    else
+        fast_fails=0
     fi
 done
 

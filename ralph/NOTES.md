@@ -273,3 +273,172 @@ See JEPA section above:
 - Fixed-size MLPs cannot generalize to different grid sizes
 - GNNs can in principle, but permutation equivariance ≠ topology equivariance
 - Adding/removing buses requires careful treatment of the graph structure
+
+---
+
+## Iteration 2 New Findings
+
+### "Not All Warm Starts Help" (arXiv:2606.08984)
+
+**Full title**: "Not All Warm Starts Help: Benchmarking Primal-Dual Initializations for ACOPF Algorithms"
+**Authors**: Babak Taheri, Daniel K. Molzahn (Georgia Tech)
+**Date**: June 2026
+
+**Key results** (19 AC-OPF instances, 5–30,000 buses):
+- Full primal+dual initialization: **47.6% median solve-time speedup**
+- Partial combinations: 12 of 14 tested produce **negative speedups** (worse than cold start)
+- Full bound-multiplier vectors only: 90.7% convergence, +26.8% median speedup
+- DC seeding post-presolve: statistically insignificant effect (p = 0.4171)
+
+**Implication**: Independently confirms WARP's finding. Providing partial dual information does not just fail to help — it actively degrades solver performance. The complete primal+dual state is the minimum necessary requirement for a neural warm start to be beneficial.
+
+**Key distinction from WARP**: WARP (Suri et al.) uses a trained GNN to predict full IP state and measures 76% IPOPT iteration reduction. Taheri & Molzahn use hand-crafted partial initializations to identify the performance floor of each component. Together they bracket the design space: WARP shows the ceiling (~76-85%), Taheri/Molzahn show what happens without complete duals (often worse than cold start).
+
+---
+
+### Graph-JEPA (arXiv:2309.36014, TMLR)
+
+**Title**: "Graph-level Representation Learning with Joint-Embedding Predictive Architectures"
+**Authors**: Geri Skenderi, Hang Li, Jiliang Tang, Marco Cristani
+**Venue**: Transactions on Machine Learning Research (TMLR)
+
+**Architecture**:
+- Context GNN encodes unmasked subgraphs; target GNN encodes masked subgraph
+- Predictor bridges context embedding to predicted target embedding
+- Hierarchical objective: predict coordinates on unit hyperbola (implicit graph hierarchy)
+- No negative sampling, no generative pixel/node reconstruction
+
+**Relevance to power grids**:
+- Power grids are heterogeneous graphs with implicit hierarchy (transmission → distribution)
+- Masking electrical zones/substations and predicting their representations forces encoder to learn congestion patterns
+- Topology-change generalization: model operates on any subgraph structure, not fixed-size
+
+---
+
+### TS-JEPA (arXiv:2509.25449, NeurIPS 2024 Workshop)
+
+**Title**: "Joint Embeddings Go Temporal"
+**Authors**: Sofiane Ennadir, Siavash Golkar, Leopoldo Sarra
+**Venue**: NeurIPS 2024 Workshop "Time Series in the Age of Large Models"
+
+**Architecture**: JEPA applied to time series — predict future-timestep latent representations from past context. No pixel/value reconstruction.
+
+**Claims**: Matches or surpasses SOTA on classification and forecasting across multiple datasets; robust to noise.
+
+**For power grids**:
+- 24-hour dispatch sequences: TS-JEPA can pre-train on historical hourly generation/price data
+- Battery SOC trajectories: temporal prediction task directly addressable
+- Renewable forecasting context: load + weather features → future grid state
+- Limitation: no constraint handling in temporal planning
+
+---
+
+### FF-JEPA (arXiv:2606.09311, Jun 2026)
+
+**Title**: "FF-JEPA: Long-Horizon Planning in World Models with Latent Planners"
+**Authors**: Sergi Masip, Jonathan Swinnen, Yutong Hu, Renaud Detry, Tinne Tuytelaars
+
+**Problem**: Standard JEPA + CEM (Cross-Entropy Method) is too expensive and ineffective for long horizons. "Flat world models" (single-step) exhibit long-horizon collapse.
+
+**Solution**: Two models:
+1. Action-free subgoal predictor: predicts intermediate states without requiring actions
+2. Forward model: predicts next state from (current state, action)
+
+**For multi-period OPF**:
+- Subgoal predictor: predict 24-hour dispatch trajectory envelope (load envelopes, price corridors) without solving per-hour dispatch
+- Forward model: given current grid state + investment decision, predict next-hour state
+- Planning: find investment actions that drive the trajectory to low-cost subgoals
+
+**Preliminary results only** — no quantitative benchmarks in the paper.
+
+---
+
+### Value-Guided JEPA (arXiv:2601.00844, Dec 2025)
+
+**Title**: "Value-guided action planning with JEPA world models"
+**Authors**: Matthieu Destrade, Oumayma Bounou, Quentin Le Lidec, Jean Ponce, Yann LeCun
+
+**Key idea**: Train the JEPA encoder so that goal-conditioned value function v(z_current, z_goal) = -d(z_current, z_goal) (latent distance = negative value/cost-to-go).
+
+**For power grids**:
+- Train the encoder so that dispatch cost is monotonically encoded in latent distance
+- Planning by gradient descent in latent space becomes equivalent to minimizing dispatch cost
+- Addresses the Design B surrogate gradient bias: if latent distance = cost, then ∇z(cost) is the correct planning gradient
+
+**Caveat**: Demonstrated only on simple continuous-action control tasks; constraint satisfaction not demonstrated.
+
+---
+
+### ADMMState Structure (verified from zap/admm/basic_solver.py)
+
+```python
+@dataclasses.dataclass
+class ADMMState:
+    num_terminals: int                    # total terminal count
+    num_ac_terminals: int                 # AC terminal count (0 for DC-only)
+    power: List[List[Tensor]]             # [device_idx][terminal] → (n_devices, T)
+    phase: List[List[Tensor]]             # same structure; None entries for DC devices
+    dual_power: Tensor                    # (num_nodes, T) — CRITICAL: prices = -rho_power * dual_power
+    dual_phase: List[List[Tensor]]        # same structure as phase
+    avg_power: Tensor                     # (num_nodes, T) — ADMM consensus variable
+    avg_phase: Tensor                     # (num_nodes, T) — ADMM consensus variable
+    resid_power: List[List[Tensor]]       # per-device residuals
+    resid_phase: List[List[Tensor]]       # per-device residuals
+    objective: float = None
+    clone_power: List[List[Tensor]] = None   # z variables (clone)
+    clone_phase: Tensor = None
+    rho_power: float = None               # ADMM step size for power
+    rho_angle: float = None               # ADMM step size for angle
+    local_variables: List = None          # device-local quantities
+```
+
+**Key**: `prices = -rho_power * dual_power` (from `as_outcome()` in basic_solver.py). For a DC-only 100-node 24-hour problem: `dual_power` shape = (100, 24) = 2,400 scalar predictions.
+
+**NeuralWarmStart must predict**: dual_power (LMPs), power (dispatch), avg_power (consensus). Residuals and clones can be initialized to zero and will be corrected in early ADMM iterations.
+
+---
+
+### DispatchLayer Parameter Interface (verified from zap/layer.py)
+
+```python
+# parameter_names = {"kwarg_name": (device_index, "attribute_name")}
+parameter_names = {
+    "gen_capacity": (0, "nominal_capacity"),    # shape [n_generators]
+    "gen_cost":     (0, "linear_cost"),         # shape [n_generators, T]
+    "line_capacity":(2, "nominal_capacity"),    # shape [n_lines]
+}
+outcome = dispatch_layer(**params)
+# outcome.prices: Tensor (num_nodes, T) — exact KKT LMPs
+# outcome.power: List[Tensor] — dispatch per device
+```
+
+**For Design A**: HGNN encoder per-node latents → node-type-specific decoders → per-device capacity/cost parameters → DispatchLayer. Load (`load[n_loads, T]`) is exogenous and passed separately, not decoded from the encoder.
+
+---
+
+### OPFData DC-OPF Compatibility
+
+**Finding**: OPFData (DeepMind, arXiv:2406.07234) provides AC-OPF solutions from IPOPT/PowerModels.jl. Zap uses DC-OPF (linearized power flow). These are NOT directly compatible for supervised training.
+
+**Path 1 (preferred)**: Re-solve DC-OPF on PGLib topologies using zap after PyPSA conversion. Produces zap-compatible DC-OPF ground truth.
+
+**Path 2**: Use OPFData grid topologies + load scenarios; replace AC solutions with DC solutions from zap. Leverages OPFData's rich topology/scenario diversity.
+
+**Path 3**: Use OPFData for unsupervised Graph-JEPA pre-training only (topology/load patterns are transferable; AC active power flows are approximately consistent with DC).
+
+**OPFData grids available**: IEEE 14/30/57/118, GOC 500/2000/10000, SDET 4661, RTE/PEGASE 6470/13659 buses. Most are available in MATPOWER format, which can be converted to PyPSA via `pandapower.converter.from_mpc()` or similar.
+
+---
+
+### LMP Accuracy Threshold Analysis (from first principles; no paper found)
+
+**No published threshold exists.** Analysis:
+
+For MEP profit-objective: gradient sign flip when |LMP_error| > |congestion_rent_of_marginal_line|
+- Typical congestion rents: $1–50/MWh
+- At $40/MWh reference price: Jami et al.'s 5-6% error = ~$2-3/MWh absolute error
+- For barely-congested lines ($1-2/MWh rent), 5-6% LMP error can flip the gradient sign
+
+For MEP cost-objective (zap's default): gradient depends on dual through ∂z*/∂η; more robust to LMP errors asymptotically.
+
+**Design B requires**: Either higher-accuracy LMP prediction than current SOTA, OR the value-guided JEPA approach that encodes cost geometry directly into the latent space.

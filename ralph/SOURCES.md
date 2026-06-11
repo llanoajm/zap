@@ -26,8 +26,10 @@ All sources verified via web search / primary source fetch. Date of verification
 | B5 | Maes, Le Lidec, Scieur, LeCun, Balestriero. "LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels." arXiv:2603.19312. Mar 2026. | https://arxiv.org/abs/2603.19312 | High: arXiv preprint; code at github.com/lucas-maes/le-wm |
 | B6 | Sobal, Zhang, Cho, Balestriero, Rudner, LeCun. "Learning from Reward-Free Offline Data: A Case for Planning with Latent Dynamics Models (PLDM)." arXiv:2502.14819. NeurIPS 2025. | https://arxiv.org/abs/2502.14819 | High: NeurIPS peer-reviewed |
 | B7 | Terver, Yang, Ponce, Bardes, LeCun. "What Drives Success in Physical Planning with JEPA World Models?" arXiv:2512.24497. Dec 2025, rev May 2026. | https://arxiv.org/abs/2512.24497 | Medium-High: preprint, includes DROID real-robot results |
-| B8 | Destrade, Bounou, Le Lidec, Ponce, LeCun. "Value-Guided Action Planning with JEPA World Models." arXiv:2601.00844. Dec 2025. | https://arxiv.org/abs/2601.00844 | Medium: preprint |
-| B9 | "FF-JEPA: Long-Horizon Planning with JEPA." arXiv:2606.09311. Jun 2026. | https://arxiv.org/html/2606.09311v1 | Medium: preprint |
+| B8 | Destrade, Bounou, Le Lidec, Ponce, LeCun. "Value-Guided Action Planning with JEPA World Models." arXiv:2601.00844. Dec 2025. | https://arxiv.org/abs/2601.00844 | Medium-High: preprint; full abstract verified; latent-distance = cost-to-go shaping |
+| B9 | Masip, Swinnen, Hu, Detry, Tuytelaars. "FF-JEPA: Long-Horizon Planning in World Models with Latent Planners." arXiv:2606.09311. Jun 2026. | https://arxiv.org/html/2606.09311v1 | Medium: preprint; full abstract verified; hierarchical subgoal + forward model |
+| B12 | Ennadir, Golkar, Sarra. "Joint Embeddings Go Temporal." arXiv:2509.25449. NeurIPS 2024 Workshop "Time Series in the Age of Large Models." | https://arxiv.org/abs/2509.25449 | High: NeurIPS workshop; full abstract verified; JEPA for time series; matches/surpasses SOTA |
+| B13 | Skenderi, Li, Tang, Cristani. "Graph-level Representation Learning with Joint-Embedding Predictive Architectures." TMLR. arXiv:2309.36014. | https://arxiv.org/abs/2309.36014 | High: TMLR peer-reviewed; full abstract verified; masked subgraph prediction; code public |
 | B10 | Meta AI blog: "V-JEPA 2: World model benchmarks." Jun 2025. | https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/ | High: official Meta AI blog |
 | B11 | Meta AI blog: "I-JEPA: AI model learns the world more like humans do." Jun 2023. | https://ai.meta.com/blog/yann-lecun-ai-model-i-jepa/ | High: official Meta AI blog |
 
@@ -92,7 +94,7 @@ All sources verified via web search / primary source fetch. Date of verification
 | # | Citation | URL | Credibility |
 |---|----------|-----|-------------|
 | F1 | Suri, Hilmarsson, Bose. "WARP: A Benchmark for Primal-Dual Warm-Starting of Interior-Point Solvers." arXiv:2605.05728. May 2026. | https://arxiv.org/abs/2605.05728 | High: 76% iteration reduction; critical dual warm-start finding |
-| F2 | "Not All Warm Starts Help." arXiv:2606.08984. Jun 2026. | https://arxiv.org/abs/2606.08984 | Medium: companion study; 19 PGLib-OPF instances |
+| F2 | Taheri & Molzahn. "Not All Warm Starts Help: Benchmarking Primal-Dual Initializations for ACOPF Algorithms." arXiv:2606.08984. Jun 2026. | https://arxiv.org/abs/2606.08984 | High: full content verified; 19 instances 5–30,000 buses; 47.6% speedup with full primal+dual; 12/14 partial = negative speedup |
 | F3 | Diehl. "Warm-Starting AC Optimal Power Flow with Graph Neural Networks." NeurIPS 2019 Climate Change AI workshop. | https://www.climatechange.ai/papers/neurips2019/1 | Medium: workshop paper; 2.8× speedup on Texas grid |
 | F4 | Amos & Kolter. "OptNet: Differentiable Optimization as a Layer in Neural Networks." ICML 2017. arXiv:1703.00443. | https://arxiv.org/abs/1703.00443 | High: ICML peer-reviewed; foundational KKT backprop |
 | F5 | Agrawal et al. "Differentiating through a Cone Program (diffcp)." JANO 2019. | https://github.com/cvxgrp/diffcp | High: peer-reviewed; foundational |
@@ -112,6 +114,7 @@ All sources verified via web search / primary source fetch. Date of verification
 | G6 | Zhang et al. (companion). arXiv:2405.07343. May 2024. | https://arxiv.org/html/2405.07343v1 | High: 60,000-90,000× vs. MILP solver |
 | G7 | "Residual Correction Models for AC OPF Using DC OPF Solutions." arXiv:2510.16064. Oct 2025. | https://arxiv.org/abs/2510.16064 | Medium: preprint; 25% lower MSE, 13× speedup |
 | G8 | "Constraint-Driven Deep Learning for N-k SC-OPF." EPSR 2024. | https://www.sciencedirect.com/science/article/pii/S0378779624005789 | High: EPSR peer-reviewed; LODF-based N-k scaling |
+| G12 | Giraud, Nellikath, Vorwerk, Alowaifeer, Chatzivasileiadis. "Neural Networks for AC OPF: Improving Worst-Case Guarantees During Training." arXiv:2510.23196. PSCC 2026. | https://arxiv.org/abs/2510.23196 | High: PSCC peer-reviewed; 57–793 bus; verification-informed training; first large-scale AC-OPF constraint verification |
 | G9 | Hu et al. "Fast and Reliable N-k Contingency Screening with Input-Convex Neural Networks." arXiv:2410.00796. Oct 2024. | https://arxiv.org/abs/2410.00796 | High: 10-20× speedup, zero false negatives |
 | G10 | Anrrango et al. "Self-Supervised Learning of Parametric Approx for SC-DC-OPF." arXiv:2601.13486. Jan 2026. | https://arxiv.org/abs/2601.13486 | Medium: preprint |
 | G11 | "Gated GNN for AC Power Flow Under Topological Uncertainty." arXiv:2507.02078. Jul 2025. | https://arxiv.org/abs/2507.02078 | Medium: preprint |

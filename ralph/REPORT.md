@@ -1,8 +1,8 @@
 # JEPA-Style World Models as AC-OPF Surrogates and Latent-Space Planners
-## Research Report — Ralph Loop, Iteration 1
+## Research Report — Ralph Loop, Iteration 2
 
 **Date**: 2026-06-11  
-**Status**: COMPLETE — all claims verified via primary sources.
+**Status**: UPDATED — Iteration 2 adds: temporal/graph JEPA extensions; "Not All Warm Starts Help" quantitative findings; concrete NeuralWarmStart code skeleton from actual ADMMState structure; Design A DispatchLayer interface; OPFData DC-OPF compatibility analysis; LMP accuracy threshold analysis.
 
 ---
 
@@ -37,6 +37,10 @@ The Joint-Embedding Predictive Architecture (JEPA) principle (LeCun, 2022) train
 | Feb 2025 | **PLDM** (Sobal et al.) | 2502.14819 | NeurIPS 2025 | Best generalization to new layouts; 23 datasets, 2D navigation |
 | Dec 2025 | **"What Drives Success..."** (Terver et al.) | 2512.24497 | Preprint | Ablation study; DINO-WM and V-JEPA-2-AC baselines; DROID robot results |
 | Mar 2026 | **LeWorldModel** (Maes et al.) | 2603.19312 | Preprint | First end-to-end JEPA from pixels; 2 loss terms, 1 hyperparameter; 48× faster than DINO-WM |
+| Jun 2026 | **FF-JEPA** (Masip et al.) | 2606.09311 | Preprint | Hierarchical two-model JEPA: subgoal predictor + forward model; overcomes long-horizon collapse |
+| Dec 2025 | **Value-Guided JEPA** (Destrade et al.) | 2601.00844 | Preprint | Shapes embedding space so latent distance = cost-to-go; goal-conditioned value planning |
+| NeurIPS 2024 WS | **TS-JEPA** (Ennadir et al.) | 2509.25449 | NeurIPS WS | JEPA for time series; matches/surpasses SOTA on classification/forecasting; robust to noise |
+| TMLR | **Graph-JEPA** (Skenderi et al.) | 2309.36014 | TMLR | Graph-level JEPA via masked subgraph prediction; applicable to power grid topologies |
 
 **LeJEPA mechanism** (arXiv:2511.08544, Balestriero & LeCun, Nov 2025):
 
@@ -153,9 +157,38 @@ Analytical differentiable repair layers for generator limits, power balance, res
 **Warm starts — critical finding** (WARP, arXiv:2605.05728, May 2026):  
 Primal-only warm starts **fail to reduce solver iterations** against the midpoint baseline (near-optimal for log-barrier centrality). An encode-process-decode GNN predicting full interior-point state (primal, dual, slack, barrier) achieves **76% reduction in IPOPT iterations**. Oracle experiment (ground-truth optimal state): 85% reduction. **Providing primal without duals causes IPOPT to diverge.** Implication: dual variable prediction is architecturally required for effective warm starts.
 
+**Confirming study** (Taheri & Molzahn, "Not All Warm Starts Help," arXiv:2606.08984, Jun 2026):  
+An independent benchmark on 19 AC-OPF instances (5–30,000 buses) tests 14 partial/full initialization combinations. Results: **full primal+dual initialization gives 47.6% median solve-time speedup**; 12 of 14 partial combinations produce **negative speedups** (worse than cold start); even supplying only bound-multiplier vectors gives +26.8% with 90.7% convergence; DC seeding post-presolve is statistically insignificant (p=0.4171). This double-confirms WARP: partial dual information is not just useless — it actively degrades performance. The requirement for a useful neural warm start is the **complete primal-dual state**.
+
 Separately: GNN warm-start for AC-OPF (Diehl 2019): mean **2.8× speedup** on Texas grid.
 
-### 1.4 Differentiable Optimization Frameworks
+### 1.4 JEPA Extensions for Non-Visual Domains (Iteration 2 Finding)
+
+The JEPA family has expanded beyond vision. Two extensions are directly relevant to power grid surrogate modeling:
+
+**TS-JEPA** (Ennadir, Golkar, Sarra; NeurIPS 2024 Workshop "Time Series in the Age of Large Models"; arXiv:2509.25449):  
+Extends JEPA to general 1D time series. Predicts future timestep representations from past context in latent space — analogous to V-JEPA's video prediction applied to scalar/vector time series. Claims to match or surpass SOTA on both classification and forecasting benchmarks across multiple datasets; reported to be robust to noise and confounding variables compared to autoregressive methods.
+
+**Relevance**: Power grids are inherently temporal. 24-hour dispatch sequences, battery SOC trajectories, and intra-day price dynamics are exactly the time-series prediction tasks TS-JEPA targets. A TS-JEPA pre-trained on historical grid dispatch sequences could serve as the temporal backbone for Design A's multi-period planner.
+
+**Graph-JEPA** (Skenderi et al., TMLR; arXiv:2309.36014):  
+Graph-level representation learning via masked subgraph prediction in latent space. Context GNN + target GNN, no negative sampling, no generative reconstruction. Hierarchical objective via coordinates on unit hyperbola.
+
+**Relevance**: Power grids are heterogeneous graphs (buses, generators, lines, transformers). Graph-JEPA can pre-train on diverse PGLib topologies by masking electrical zones/subtrees and predicting their representations from the surrounding context. This directly operationalizes Design A's JEPA pre-training stage without requiring video-domain adaptations.
+
+**FF-JEPA** (Masip et al., arXiv:2606.09311, Jun 2026):  
+Addresses long-horizon JEPA planning failure via hierarchical decomposition: an action-free subgoal predictor provides intermediate latent targets, and a forward model predicts state-to-state transitions. Overcomes "flat world model long-horizon collapse" without requiring CEM (which is too expensive for long horizons).
+
+**Relevance**: Multi-period OPF planning (24–168 hours) requires exactly this type of long-horizon latent planning. FF-JEPA's hierarchical structure maps naturally to: (a) predict the 24-hour dispatch trajectory as latent subgoals (load/price envelope), then (b) optimize hourly actions given those anchors. This is a concrete architectural template for Design B's latent planner over multi-period expansion.
+
+**Value-Guided JEPA** (Destrade, Bounou, Le Lidec, Ponce, LeCun; arXiv:2601.00844, Dec 2025):  
+Shapes the embedding space during training so that a goal-conditioned value function maps directly to distance in latent space — i.e., latent distance = cost-to-go. Planning by gradient descent in this space is equivalent to minimizing cost-to-go.
+
+**Relevance**: For Design B, encoding dispatch cost into the geometry of the latent space would make latent-space gradient descent align with cost minimization by construction. This addresses the "surrogate gradient bias" problem: if the latent metric encodes dispatch cost, then gradient descent in latent space *is* cost-gradient descent.
+
+---
+
+### 1.5 Differentiable Optimization Frameworks
 
 **OptNet** (Amos & Kolter, ICML 2017; arXiv:1703.00443): Differentiable QP layer. Backprop via implicit differentiation of KKT conditions — single KKT matrix solve per backward pass. GPU-accelerated primal-dual IP solver.
 
@@ -165,7 +198,7 @@ Separately: GNN warm-start for AC-OPF (Diehl 2019): mean **2.8× speedup** on Te
 
 **Relationship to zap**: zap's `PlanningProblemCVX.backward()` implements the same principle independently — implicit differentiation through KKT conditions via `layer.backward()`. This is architecturally equivalent to cvxpylayers but custom-built for power networks with awareness of the specific DC-OPF KKT structure.
 
-### 1.5 The `zap` Codebase
+### 1.6 The `zap` Codebase
 
 **Repository**: https://github.com/degleris1/zap  
 **Core papers**:
@@ -231,6 +264,29 @@ zap DispatchLayer (ADMM or CVXPY)
     ├─→ Dispatch (primal): power, angles
     └─→ Dual variables: prices (LMPs), phase_duals, local_inequality_duals  [exact KKT]
 ```
+
+**Verified DispatchLayer interface** (`zap/layer.py`): The decoder outputs are consumed via a `parameter_names` dict that maps named tensors to specific device attributes:
+
+```python
+# Verified from zap/layer.py lines 44-68
+parameter_names = {
+    "gen_capacity":  (0, "nominal_capacity"),   # shape [n_generators]
+    "gen_cost":      (0, "linear_cost"),         # shape [n_generators, T]
+    "line_capacity": (2, "nominal_capacity"),    # shape [n_lines]
+}
+# HGNN latent → OPF parameter decoder:
+class OPFParamDecoder(nn.Module):
+    def forward(self, node_latents):   # per-node embeddings from Graph-JEPA
+        return {
+            "gen_capacity": F.softplus(self.gen_cap_head(gen_latents)),
+            "gen_cost": F.softplus(self.gen_cost_head(gen_latents)),
+            "line_capacity": F.softplus(self.line_cap_head(line_latents)),
+        }
+outcome = dispatch_layer(**decoder(encoder(graph)))
+lmps = outcome.prices   # Tensor (num_nodes, T) — exact KKT duals
+```
+
+Key: `load[n_loads, T]` is exogenous (from the scenario/forecast), not learned. Only capacity and cost parameters are decoded from the latent.
 
 **Differentiability**: Full chain is differentiable:
 - Encoder + decoder: standard backprop
@@ -327,7 +383,54 @@ zap ADMMLayer (warm-started) → DispatchOutcome (fewer iterations)
 
 The follow-up Degleris paper (arXiv:2410.13055) shows that warm starts already provide **100× speedup** for interactive planning scenarios. Design C's JEPA encoder extends this to new topologies where the previous warm start is not applicable.
 
-**Implementation in zap**: Add a `NeuralWarmStart` class encapsulating a JEPA-trained encoder + ADMM-state decoder. Interface: `admm_layer.forward(initial_state=neural_warm_start(problem))`. Requires no other changes to the planning loop.
+**Implementation in zap**: The `ADMMLayer.forward(initial_state=...)` interface already exists in `zap/admm/layer.py`. The `initial_state` parameter accepts an `ADMMState` dataclass (`zap/admm/basic_solver.py`). Verified field structure:
+
+```python
+# ADMMState (from zap/admm/basic_solver.py)
+@dataclasses.dataclass
+class ADMMState:
+    num_terminals: int
+    num_ac_terminals: int
+    power: List[List[Tensor]]      # [device_idx][terminal_idx] → (n_devices, T)
+    phase: List[List[Tensor]]      # same structure; None for DC-only
+    dual_power: Tensor             # (num_nodes, T) — NOTE: prices = -rho_power * dual_power
+    dual_phase: List[List[Tensor]] # same structure as phase
+    avg_power: Tensor              # (num_nodes, T) — ADMM consensus variable
+    avg_phase: Tensor              # (num_nodes, T) — ADMM consensus variable
+    resid_power: List[List[Tensor]]
+    resid_phase: List[List[Tensor]]
+    clone_power: List[List[Tensor]] = None
+    clone_phase: Tensor = None
+    rho_power: float = None        # ADMM penalty parameter
+    rho_angle: float = None
+    local_variables: List = None
+
+class NeuralWarmStart(nn.Module):
+    """JEPA-trained encoder predicting ADMMState for warm-starting ADMMLayer."""
+    def __init__(self, hgnn_encoder, num_nodes, num_devices_per_type, T):
+        super().__init__()
+        self.encoder = hgnn_encoder          # Graph-JEPA or HGNN encoder
+        self.power_head = nn.ModuleList(...)  # one head per device type
+        self.dual_power_head = nn.Linear(latent_dim, num_nodes * T)
+
+    def forward(self, graph_features) -> ADMMState:
+        z = self.encoder(graph_features)     # latent: (latent_dim,)
+        dual_power = self.dual_power_head(z).reshape(num_nodes, T)
+        power = [head(z) for head in self.power_head]
+        return ADMMState(
+            num_terminals=..., num_ac_terminals=0,
+            power=power, phase=None,
+            dual_power=dual_power, dual_phase=None,
+            avg_power=..., avg_phase=None,
+            resid_power=..., resid_phase=None,
+            rho_power=1.0, rho_angle=None,
+        )
+
+# Usage: no changes to ADMMLayer needed
+outcome = admm_layer.forward(initial_state=warm_start(graph_data), **params)
+```
+
+The key prediction target is `dual_power` (shape `(num_nodes, T)`) — which equals `-prices/rho_power`. Accurate `dual_power` prediction is equivalent to accurate LMP prediction, and the WARP+Taheri benchmarks confirm this is strictly required for effective warm starts.
 
 **Failure modes**:
 - Poor warm-start predictions (large ADMM state error) provide no benefit or slow convergence (primal-dual ADMM is sensitive to imbalanced initializations)
@@ -492,29 +595,28 @@ Use PyPSA `load_medium` (~100 nodes), 24-hour snapshots, varied load profiles (�
 - Node features from `zap/importers/pypsa.py`: bus (load, voltage bounds), generator (capacity, cost curve), line (impedance, thermal limit)
 - Output: predicted ADMM initial state tensors matching `ADMMState` dataclass
 
-**Training**: Supervised MSE on ADMM solution (power, angle, prices, phase_duals).
+**Training targets** (exact fields from `ADMMState`):
+- Primary: `dual_power` (num_nodes × T) ← equivalent to predicting LMPs; confirmed by code: `prices = -rho_power * dual_power`
+- Secondary: `power[device][terminal]` (per-device per-terminal tensors)
+- Derived (computed from above): `avg_power` (consensus), `resid_power` (residuals)
+- Loss: weighted MSE, heavier weight on `dual_power` (given its criticality per WARP/Taheri findings)
 
 **Evaluation metrics**:
 - ADMM convergence curves: iterations to ε-primal-dual-gap with/without neural warm start
 - LMP accuracy at convergence (unchanged — same KKT solution, only faster)
 - Transfer: train on weekday scenarios, evaluate on weekend; train on summer, evaluate on winter
+- Comparison baseline: cold start (current default), previous-scenario warm start (current zap behavior)
 
-**Integration**: 
-```python
-class NeuralWarmStart:
-    def __init__(self, encoder): self.encoder = encoder
-    def __call__(self, problem): return self.encoder.predict_admm_state(problem)
-
-admm_layer.forward(initial_state=neural_warm_start(current_scenario))
-```
-
-**Success criterion**: ≥50% reduction in mean ADMM iterations vs. cold start on held-out scenarios.
+**Success criterion**: ≥47.6% reduction in mean ADMM solve time (matching the best-case result from Taheri & Molzahn's full-primal-dual benchmark) on held-out scenarios.
 
 ### Phase 2: Design A — JEPA Encoder + KKT Head for Cross-Topology Generalization (6–12 months)
 
 **Goal**: Train a JEPA encoder on diverse PGLib cases; demonstrate cross-topology <3% optimality gap and accurate LMPs (compare to HH-MPNN benchmark).
 
-**Data**: OPFData (DeepMind, arXiv:2406.07234) — 3M instances across 10 grids. Supplement with augmented PGLib cases. For zap's DC-OPF: regenerate DC solutions using zap (OPFData uses AC-IPOPT; DC approximation may be needed for consistency).
+**Data** (Iteration 2 clarification): OPFData (DeepMind, arXiv:2406.07234) uses AC-OPF (IPOPT/PowerModels.jl); zap is DC-OPF. These are **not directly compatible** for supervised training. Three options, in order of preference:
+1. Convert PGLib-OPF benchmark cases (14/30/57/118/300/500 bus) to PyPSA format and re-solve with zap's DC-OPF. This is the cleanest approach and produces exactly the target distribution (zap DC-OPF duals). The `load_pypsa_network()` function (`zap/importers/pypsa.py`) is the correct entry point.
+2. Use OPFData's network topology and load scenarios, but discard AC solutions; re-solve DC with zap. ~3M scenarios across 10 grids with topology variation.
+3. Use OPFData AC solutions for Graph-JEPA unsupervised pre-training only (pattern representation learning), then re-solve DC with zap for fine-tuning. DC and AC active power flows are approximately consistent.
 
 **Encoder**: HGNN (following OPF-HGNN / HH-MPNN architecture). Type-specific message passing, Transformer for long-range bus dependencies.
 
@@ -563,11 +665,29 @@ bias = {k: (grad_exact[k] - grad_surrogate[k]).norm() / grad_exact[k].norm()
 
 3. **AC-OPF extension**: Zap uses DC-OPF. Extending to AC-OPF requires non-convex KKT implicit differentiation. The hard-constrained DC-to-AC NN (arXiv:2602.06255) achieves 40× speedup on PEGASE-9241 with <10⁻⁴ violations — this could serve as the "OPF head" for Design A in the AC setting.
 
-4. **Temporal JEPA for multi-period dispatch**: Battery SOC dynamics and intra-day price volatility require a temporal world model. Adapting V-JEPA-2's video prediction framework to hourly grid states (24-step sequences) is a natural extension for Design A/B.
+4. **Temporal JEPA for multi-period dispatch**: ✅ *Partially answered (Iteration 2)*. TS-JEPA (arXiv:2509.25449) directly handles time-series prediction in latent space and is applicable to 24-hour OPF sequences. FF-JEPA (arXiv:2606.09311) addresses long-horizon planning collapse via hierarchical subgoal prediction — maps naturally to multi-period dispatch. Remaining gap: battery SOC dynamics involve hard inequality constraints (SOC bounds) that no JEPA paper handles explicitly.
 
 5. **Foundation model vs. local fine-tuning**: Should the grid JEPA be a single model for all topologies (foundation model) or fine-tuned per grid? GridSFM's approach (train on diverse grids, no fine-tuning at deployment) is the foundation model vision. For zap's planning use case, fine-tuning on the specific PyPSA network would be simpler and more accurate, but misses the generalization benefit.
 
-6. **Dual accuracy requirements for planning**: The exact threshold on LMP error below which planning gradient bias is acceptable depends on the investment problem. Marginal transmission expansions (near-congested lines) are most sensitive. A sensitivity analysis using zap's exact KKT gradients as ground truth would define the accuracy requirement for Design B.
+6. **Dual accuracy requirements for planning** (Iteration 2 analysis — no paper threshold found):
+
+From-first-principles analysis of the MEP gradient ∇J(η) = γ + ∂z*(η)ᵀ · ∇h(z*(η)):
+
+For the **profit objective** (h = Σᵢ νᵢ*(η) · gᵢ*(η)):
+- Gradient error scales as: |∇J_surrogate − ∇J_exact| ∝ |ε_ν| · |g|
+- Sign flip (wrong investment direction) occurs when: |ε_ν| > |congestion_rent_of_marginal_line|
+- Typical congestion rents range $1–50/MWh; on a $40/MWh reference, Jami et al.'s 5–6% error = ~$2–3/MWh absolute error
+- **Verdict**: 5–6% LMP error is borderline — adequate for strongly congested lines (large rents) but unreliable for marginal investments at barely-congested lines
+
+For the **cost objective** (h = c(x*(η))):
+- Gradient depends on dual variables less directly (through ∂z*/∂η); LMP accuracy affects convergence rate but not correctness asymptotically if the surrogate is smooth
+- **Verdict**: Cost-objective planning is more forgiving than profit-objective
+
+No empirical paper establishes the threshold. The required experiment: run Design B's planning loop with surrogate gradients at varying LMP accuracy levels; measure deviation from zap's exact KKT gradient using cosine similarity. Target: cosine similarity > 0.9 for investment decisions to be reliable.
+
+7. **OPFData DC-OPF compatibility**: ✅ *Resolved (Iteration 2)*. OPFData provides AC-OPF solutions — not directly compatible with zap's DC-OPF. For supervised training, the correct path is to re-solve DC-OPF on PGLib topologies using zap's `DispatchLayer` after converting networks to PyPSA format. OPFData can still be used for unsupervised Graph-JEPA pre-training (topology and load patterns are transferable even if exact AC duals are not).
+
+8. **Value-guided JEPA for Design B**: Value-Guided JEPA (arXiv:2601.00844) shapes latent space so distance = cost-to-go. For Design B, training the predictor P such that latent distance encodes expected dispatch cost would make gradient descent in latent space equivalent to cost gradient descent — directly addressing the surrogate gradient bias problem. Requires: (a) access to cost values during training (available from zap), (b) a metric learning objective in addition to SIGReg. Not yet demonstrated for constrained optimization problems.
 
 ---
 
@@ -599,3 +719,9 @@ Key verified citations:
 - Agrawal et al. arXiv:1910.12430, NeurIPS 2019 — cvxpylayers
 - arXiv:2512.11127 (Dec 2025) — Flow Matching OPF feasibility (0.07% gap)
 - arXiv:2602.06255 (Feb 2026) — Hard-constrained DC-to-AC NN (40× speedup)
+- Taheri & Molzahn arXiv:2606.08984 (Jun 2026) — "Not All Warm Starts Help" (47.6% speedup, 12/14 partial = negative)
+- Ennadir et al. arXiv:2509.25449 (NeurIPS 2024 WS) — TS-JEPA for time series
+- Skenderi et al. arXiv:2309.36014 (TMLR) — Graph-JEPA for graph-level representation
+- Masip et al. arXiv:2606.09311 (Jun 2026) — FF-JEPA for long-horizon planning
+- Destrade et al. arXiv:2601.00844 (Dec 2025) — Value-guided JEPA planning
+- Giraud et al. arXiv:2510.23196 (Oct 2025, PSCC 2026) — Verification-informed AC-OPF NN

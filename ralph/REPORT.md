@@ -2,7 +2,7 @@
 ## Research Report — Ralph Loop, Iteration 3
 
 **Date**: 2026-06-11  
-**Status**: UPDATED — Iteration 3 adds: GridSFM architecture deep-dive (7 node types, 8-block HGNN, Hodge PE, SignedIncidenceConv, DC prior); GridSFM × zap compatibility analysis for Design A/C; critical clarification that zap uses DC power flow (not true AC-OPF); MATPOWER → PyPSA → zap conversion pipeline; binding constraint pattern analysis; DINO-WM vs. LeWM for non-visual domains; AC-OPF extension assessment.
+**Status**: UPDATED — Iteration 4 adds: (a) LP piecewise-constant gradient theorem — LMP MSE is wrong metric; active-set accuracy is right metric for Design B; (b) battery/storage warm-start analysis — SOC temporal coupling, DualBattery intertemporal shadow prices, increased NeuralWarmStart complexity; (c) MPA-DNN as the only multi-period OPF surrogate with hard SOC constraints (arXiv:2510.09349); (d) verification-informed training (arXiv:2510.23196, alpha-CROWN, 793-bus) and IBP for SC-DCOPF (arXiv:2511.15624, 8316-bus) — full verification landscape assessed; (e) NUMax–JEPA connection ruled out; ADMM-GNN acceleration (arXiv:2509.05288) documented instead; (f) LMP gradient sensitivity experiment script (ralph/experiments/lmp_gradient_sensitivity.py).
 
 ---
 
@@ -231,6 +231,16 @@ A key question for Design C/B: should the grid encoder be a frozen pre-trained m
 
 ---
 
+### 1.6 Multi-Period OPF Surrogates with Battery Storage (Iteration 4 Survey)
+
+The intersection of (a) learned OPF surrogates and (b) multi-period battery dispatch with explicit SOC constraints is nearly vacant as of mid-2026.
+
+**MPA-DNN** (Kim, Kim, Kim, arXiv:2510.09349, Oct 2025): The only published surrogate with a hard SOC constraint inside a differentiable projection layer. Architecture: neural network predicts a "warm" operating point → QP projection enforces all multi-period constraints simultaneously (power balance, line limits, ramp-rate, SOC bounds and dynamics). SOC evolution encoded via a lower-triangular cumulative sum matrix S (Appendix A of the paper), so `S ⊗ [η^ch U^ch − U^dis/η^dis]` propagates the recurrence `e_t = e_{t-1} + p^ch·η^ch − p^dis/η^dis` across all T periods in the projection's constraint set. Results: <0.024% optimality gap, zero ramp violations on IEEE 39-bus, 24-hour. DC-OPF only. No LMPs. No speedup numbers reported (explicitly deferred).
+
+**Critical gaps**: No paper computes multi-period LMPs from a learned surrogate with battery SOC. No JEPA or world-model approach has been applied to multi-period OPF with storage. This is a genuine and significant research gap directly addressable with zap's battery+planning infrastructure.
+
+**Relevant precedent for LMPs from NN-OPF**: Garcia et al. (arXiv:2502.01844, 2025) derives discriminatory and uniform LMPs from KKT conditions of a NN-encoded stability-constrained OPF (single-period AC-OPF, no storage). Confirms that KKT-derived prices from NN-augmented OPF are economically meaningful and technically feasible.
+
 ### 1.7 Differentiable Optimization Frameworks
 
 **OptNet** (Amos & Kolter, ICML 2017; arXiv:1703.00443): Differentiable QP layer. Backprop via implicit differentiation of KKT conditions — single KKT matrix solve per backward pass. GPU-accelerated primal-dual IP solver.
@@ -240,6 +250,10 @@ A key question for Design C/B: should the grid encoder be a frozen pre-trained m
 **cvxpylayers** (Agrawal, Amos et al., NeurIPS 2019; arXiv:1910.12430): Wraps CVXPY problems via ASA (affine-solver-affine) decomposition + diffcp backward pass. Disciplined Parametrized Programming (DPP) ensures affine parameter→data map. Supports PyTorch, JAX, MLX.
 
 **Relationship to zap**: zap's `PlanningProblemCVX.backward()` implements the same principle independently — implicit differentiation through KKT conditions via `layer.backward()`. This is architecturally equivalent to cvxpylayers but custom-built for power networks with awareness of the specific DC-OPF KKT structure.
+
+**ADMM-GNN acceleration** (arXiv:2509.05288, "Learning to Accelerate Distributed ADMM Using Graph Neural Networks"): GNNs predict ADMM step sizes, dual variable trajectories, or convergence behavior using the graph structure of the ADMM problem. This is a real and directly relevant research thread for zap's `ADMMLayer`, distinct from JEPA objectives. The NUMax (arXiv:2509.10722) formulation in zap is a network utility maximization (convex resource allocation, NOT power grid), and has no theoretical bridge to JEPA embedding objectives — this connection is ruled out (Iteration 4, full literature search found zero relevant results).
+
+**Verification-informed training for OPF heads** (arXiv:2510.23196, Giraud et al., PSCC 2026): alpha-CROWN bound propagation through the NN layers during training, adding certified worst-case constraint violation as a penalty term. Achieves ≥50% worst-case violation reduction and first-ever full constraint certification up to 793 buses. IBP variant (arXiv:2511.15624): scales to 8,316-bus SC-DCOPF, certified objective gaps <3.98%. Both approaches are directly applicable to Design A's OPF decoder head as a final safety layer.
 
 ### 1.8 The `zap` Codebase
 
@@ -358,12 +372,21 @@ Key: `load[n_loads, T]` is exogenous (from the scenario/forecast), not learned. 
 
 **Key advantage over Microsoft GridSFM**: GridSFM is a standalone surrogate (2.23% median cost gap, no exact duals). Design A uses GridSFM-like encoding but routes through the exact KKT layer — preserving the <3% accuracy of the surrogate head while delivering exact duals for planning.
 
+**Verification-informed training for Design A** (Iteration 4 — from arXiv:2510.23196, PSCC 2026):
+
+The JEPA encoder + OPF decoder stack can be subjected to alpha-CROWN verification-informed training during the supervised fine-tuning phase. alpha-CROWN propagates certified bounds through all layers of the encoder+decoder, adding a worst-case constraint violation penalty to the training loss. This achieves ≥50% worst-case violation reduction and provides domain-wide certified constraint bounds — stronger guarantees than DC3/E2ELR (structural feasibility only) or homeomorphic projection (no certified domain-wide bounds). For ReLU-based GNN encoders, alpha-CROWN is directly applicable; transformer-style attention (softmax) adds overhead but is tractable. The key input-domain specification: use interval over the training data's latent distribution as a conservative bounding box for the encoder output.
+
+The complementary IBP approach (arXiv:2511.15624, Tekeler et al., 2025) certifies SC-DCOPF objective bounds simultaneously for all N-1 contingencies, scales to 8,316-bus systems, and is directly compatible with zap's DC-OPF + N-k formulation. This provides an alternative, computationally lighter certification path for Design A at large scale.
+
+**KKT-derived LMPs from NN-augmented OPF**: The precedent in arXiv:2502.01844 (Garcia et al., 2025) confirms that developing LMPs from KKT conditions of a NN-augmented OPF (stability constraints encoded as NN) produces economically meaningful discriminatory and uniform prices. Design A's exact KKT head follows the same principle, making this the cleanest path to guaranteed LMPs from a learned surrogate.
+
 **Failure modes**:
 - If the decoder produces physically inconsistent parameters, the OPF may be infeasible
 - AC-OPF extension requires non-convex KKT implicit differentiation (not currently in zap — zap uses DC-OPF)
 - Transfer to very different grid topologies (radial distribution vs. meshed transmission) may need fine-tuning
+- Transformer-style encoder attention increases verification overhead for alpha-CROWN
 
-**Feasibility verdict**: **HIGH** — most components exist. HH-MPNN proves the GNN architecture achieves <1% optimality gap. WARP proves dual warm-start is critical. The main novelty is combining JEPA pre-training with the exact KKT head.
+**Feasibility verdict**: **HIGH** — most components exist. HH-MPNN proves the GNN architecture achieves <1% optimality gap. WARP proves dual warm-start is critical. Verification-informed training (alpha-CROWN) provides certified constraint guarantees. KKT-derived LMPs from NN-augmented OPF are validated in arXiv:2502.01844. The main novelty is combining JEPA pre-training with the exact KKT head.
 
 ---
 
@@ -493,6 +516,19 @@ The key prediction target is `dual_power` (shape `(num_nodes, T)`) — which equ
 - AC power flow physics must be embedded in the encoder; a purely statistical predictor may violate flow laws at initialization
 - Topology-general warm starts are less accurate than topology-specific ones — trade-off between generality and accuracy
 
+**Battery/storage warm-start complexity (Iteration 4 — verified from code)**:
+
+For multi-period dispatch with batteries (zap's `StorageUnit`), the NeuralWarmStart is substantially more complex than for pure generator/line problems. The `ADMMState` for a battery problem includes:
+- `dual_power`: (num_nodes, T) — nodal LMPs (same as before)
+- `power`: [discharge - charge] per battery — net injection
+- `local_variables`: (energy, charge, discharge) trajectories — the full SOC state
+
+The SOC trajectory must be **temporally consistent**: `energy[t+1] = energy[t] + charge[t]*η_c - discharge[t]/η_d`, with boundary conditions `energy[0] = initial_soc * energy_capacity`. Additionally, `DualBattery` has an intertemporal shadow price λ ∈ ℝ^(n_devices × T) representing the marginal value of stored energy — this must also be predicted for effective warm starts.
+
+The only published surrogate with a hard SOC constraint in a projection layer is **MPA-DNN** (arXiv:2510.09349, 2025): it uses a lower-triangular cumulative sum matrix to propagate SOC evolution constraints through a QP projection, achieving <0.024% optimality gap on IEEE 39-bus, 24-hour problems. However, MPA-DNN does not compute LMPs or report speedup numbers. This is the template for how battery SOC should be handled in Design C's NeuralWarmStart for multi-period problems.
+
+For a TS-JEPA-style temporal encoder predicting the full battery trajectory: the predicted (energy, charge, discharge) can be post-processed via projection onto the SOC constraint set (analogous to MPA-DNN's QP projection) to ensure temporal consistency before inserting into the ADMMState warm start.
+
 **GridSFM as pre-trained backbone for Design C** (Iteration 3 assessment): GridSFM's `GridTransformerBackbone` (PyTorch + PyG, 8-block HGNN, Hodge PE, available MIT licensed) is structurally compatible as an encoder for the `NeuralWarmStart`. However, it was trained on AC-OPF problems — output heads predict |V|, Q (reactive power) that zap's DC-OPF does not use. For Design C, the adaptation would be: (1) load backbone without AC output heads, (2) replace with `DCWarmStartHead` predicting `dual_power` (LMPs) and `power` (active dispatch) in DC-OPF units, (3) fine-tune on zap-generated DC-OPF data. The Hodge PE, cycle basis, and topological structure features from GridSFM-Open's pre-training should transfer, reducing fine-tuning data requirements compared to training from scratch.
 
 **Alternative**: Train the HGNN from scratch using the same architecture as GridSFM/HH-MPNN but purely on DC-OPF data. This avoids the AC/DC representation gap at the cost of needing more training data.
@@ -564,7 +600,25 @@ Strong duality reformulation converts to single-level but introduces bilinear no
 
 ### 4.3 Multi-Period and Storage
 
-Zap supports multi-period dispatch (battery storage via `DualBattery`, SOC constraints). For Design C/A, the JEPA encoder must handle temporal dynamics: the warm start for hour t+1 should be informed by the dispatch outcome of hour t (battery state of charge, price trajectories). A temporal JEPA (analogous to V-JEPA's video prediction) that predicts the t+1 grid state from the t state is a natural extension.
+Zap supports multi-period dispatch (battery storage via `StorageUnit`/`DualBattery`, SOC constraints). The SOC evolution is:
+```
+energy[t+1] = energy[t] + charge[t]*η_c - discharge[t]/η_d
+energy[0] = initial_soc * energy_capacity
+energy[T] = final_soc  * energy_capacity
+```
+
+This is a **linear constraint** (fixed efficiency parameters), enabling exact KKT and ADMM Schur complement acceleration. `DualBattery` carries an intertemporal shadow price λ ∈ ℝ^(n_devices × T) — the marginal value of stored energy at each timestep.
+
+**For Design C (NeuralWarmStart with batteries)**: The warm start must predict:
+1. `dual_power`: (num_nodes, T) — nodal LMPs (same as non-battery case)
+2. Battery `local_variables`: (energy, charge, discharge) — the SOC trajectory
+3. Battery intertemporal dual λ: (n_batteries, T) — required for effective ADMM warm start
+
+Template: MPA-DNN's lower-triangular matrix projection can be adapted as a post-processing step to enforce SOC temporal consistency on the predicted battery trajectory before inserting into `ADMMState`. This ensures the warm start does not violate the SOC evolution constraint, reducing ADMM iterations needed to re-establish feasibility.
+
+**For Design A/B (temporal planning)**: TS-JEPA (arXiv:2509.25449) and FF-JEPA (arXiv:2606.09311) handle time series prediction in latent space, but neither handles hard SOC inequality bounds. The natural extension: a temporal JEPA pre-trained on historical battery dispatch sequences + post-processing via SOC projection (MPA-DNN template) to enforce hard constraints on the predicted trajectory.
+
+**Gap in the literature**: No paper combines multi-period OPF LMPs + battery SOC in a learned surrogate. This is the primary open frontier for multi-period zap planning with JEPA surrogates.
 
 ---
 
@@ -581,13 +635,30 @@ This derivative is:
 
 **What the WARP benchmark tells us**: Even providing the exact optimal primal solution (x*) without the dual (λ*) causes IPOPT to diverge. The dual is not a secondary output — it is a co-equal part of the warm-start state. For any surrogate to provide useful warm starts, it must predict LMPs accurately, not just dispatch.
 
-**Quantitative implication**: Jami et al.'s direct regression achieves ~5–6% LMP error. If this error is uniformly distributed, 5–6% LMP accuracy is insufficient for warm starts (based on WARP's finding that primal-only diverges). Active set prediction (Pagnier, Chertkov) produces structurally consistent LMPs but depends on correct active set identification — which fails when binding constraint patterns are unseen during training.
+**LP Piecewise-Constant Gradient Theorem (Iteration 4 — key finding)**:
+
+DC-OPF is a **linear program**. For LPs, the LP sensitivity theorem establishes: the optimal primal+dual solution z*(η), λ*(η) is piecewise linear in the parameters η. Therefore, the **planning gradient ∇J(η) is piecewise constant** — constant within each active-set region, with discontinuous jumps at active-set boundaries.
+
+This has a critical consequence: **LMP MSE is the wrong accuracy metric for Design B**.
+
+| Surrogate scenario | LMP error | Active set | Gradient quality |
+|---|---|---|---|
+| Correct active set, 5% LMP error | 5% | ✅ Correct | ≈ 0 bias |
+| Wrong active set, 0.1% LMP error | 0.1% | ❌ Wrong | Can be 100%+ relative error |
+
+**Smooth surrogates (neural networks) are structurally biased at boundaries**: A ReLU/sigmoid network produces smooth gradient estimates even where the LP gradient is discontinuous. At every active-set boundary in the training domain, the surrogate gradient interpolates between the two adjacent piecewise-constant gradients — which is wrong for both sides. This is an inherent bias of any smooth function approximator applied to an LP sensitivity problem.
+
+**The right metric for Design B**: Active-set prediction accuracy (fraction of scenarios where the binding constraint pattern is correctly identified). This determines whether the gradient bias is zero or large — LMP MSE measures the wrong thing.
+
+**Quantitative implication**: Jami et al.'s direct regression (arXiv:2306.10080) achieves ~5–6% LMP error. By the LP theorem, if that 5–6% error corresponds to correct active-set identification (just noisy prices within the right region), gradient bias is negligible. If the 5–6% error reflects active-set misidentification, the gradient can be completely wrong. No published paper directly measures active-set accuracy for smooth LMP regressors — this is an important gap.
 
 **Active set coverage** (Iteration 3 finding): For IEEE 118-bus under typical random sampling, only ~3–53 distinct active sets appear (Misra et al. 2022; RAMBO 2023). For a ~100-node zap grid: expect 3–100 distinct active sets. This is tractable for classification — a Design B surrogate CAN in principle learn to identify the correct active set if the training data covers the relevant binding patterns. Key risk: uniform random load perturbation misses rare congestion regimes. Use RAMBO-style boundary sampling (arXiv:2304.10912) to ensure full active set coverage during training. Without boundary sampling, the surrogate will fail precisely when congestion patterns most matter — near the boundaries where LMPs are most volatile.
 
+**Experiment designed** (see `ralph/experiments/lmp_gradient_sensitivity.py`): Demonstrates the piecewise-constant gradient structure empirically on IEEE 14-bus; quantifies smooth-surrogate gradient bias at active-set boundaries; provides ADMM warm-start sensitivity pseudocode.
+
 **For Designs A and C**: This problem is circumvented by ensuring the exact KKT layer always runs. Warm-start prediction error affects convergence speed but not solution quality. If the warm start is wrong, ADMM simply takes more iterations — it still converges to the correct LMPs.
 
-**For Design B**: This problem is fatal if dual decoder accuracy is insufficient. The planning gradient depends critically on LMP accuracy. Small LMP errors at constraint boundaries cause large planning gradient errors.
+**For Design B**: This problem is critical. The planning gradient quality depends on active-set identification accuracy, not LMP MSE. A Design B surrogate needs: (a) training data that covers all relevant active sets (RAMBO sampling), (b) a mechanism to identify the active set (active-set classifier, or JEPA-encoded topology features that capture congestion patterns), and (c) a planning procedure robust to the residual smooth-interpolation bias at boundaries.
 
 ### 5.2 DC vs. Full AC: The Clarified Scope (Iteration 3)
 
@@ -676,6 +747,10 @@ Use PyPSA `load_medium` (~100 nodes), 24-hour snapshots, varied load profiles (�
 
 **Success criterion**: ≥47.6% reduction in mean ADMM solve time (matching the best-case result from Taheri & Molzahn's full-primal-dual benchmark) on held-out scenarios.
 
+**Battery extension (Phase 1b)**: For multi-period problems with `StorageUnit` devices, the NeuralWarmStart must additionally predict battery `local_variables` (energy, charge, discharge trajectories) and battery intertemporal dual λ. Use MPA-DNN's lower-triangular SOC projection as post-processing to enforce temporal consistency before inserting into `ADMMState`. Additional evaluation metric: SOC trajectory prediction error (fraction of timesteps where predicted SOC violates bounds before projection correction).
+
+**LP gradient sensitivity validation** (Phase 0 — pre-cursor experiment): Before Phase 1, run `ralph/experiments/lmp_gradient_sensitivity.py` on IEEE 14-bus to empirically demonstrate the piecewise-constant gradient structure. This confirms the theoretical LP gradient theorem and provides the empirical foundation for the Design B gradient bias analysis.
+
 ### Phase 2: Design A — JEPA Encoder + KKT Head for Cross-Topology Generalization (6–12 months)
 
 **Goal**: Train a JEPA encoder on diverse PGLib cases; demonstrate cross-topology <3% optimality gap and accurate LMPs (compare to HH-MPNN benchmark).
@@ -735,31 +810,39 @@ bias = {k: (grad_exact[k] - grad_surrogate[k]).norm() / grad_exact[k].norm()
 
 3. **AC-OPF extension**: Zap uses DC-OPF. Extending to AC-OPF requires non-convex KKT implicit differentiation. The hard-constrained DC-to-AC NN (arXiv:2602.06255) achieves 40× speedup on PEGASE-9241 with <10⁻⁴ violations — this could serve as the "OPF head" for Design A in the AC setting.
 
-4. **Temporal JEPA for multi-period dispatch**: ✅ *Partially answered (Iteration 2)*. TS-JEPA (arXiv:2509.25449) directly handles time-series prediction in latent space and is applicable to 24-hour OPF sequences. FF-JEPA (arXiv:2606.09311) addresses long-horizon planning collapse via hierarchical subgoal prediction — maps naturally to multi-period dispatch. Remaining gap: battery SOC dynamics involve hard inequality constraints (SOC bounds) that no JEPA paper handles explicitly.
+4. **Temporal JEPA for multi-period dispatch**: ✅ *Substantially answered (Iterations 2+4)*. TS-JEPA (arXiv:2509.25449) directly handles time-series prediction in latent space and is applicable to 24-hour OPF sequences. FF-JEPA (arXiv:2606.09311) addresses long-horizon planning collapse. **Battery SOC constraints**: MPA-DNN (arXiv:2510.09349) provides the template — SOC temporal coupling via lower-triangular projection matrix. The hybrid approach: TS-JEPA temporal encoder predicts dispatch trajectory; MPA-DNN-style QP projection post-processes to enforce hard SOC bounds. No paper has yet combined JEPA prediction with hard SOC constraint projection for multi-period OPF.
 
 5. **Foundation model vs. local fine-tuning**: Should the grid JEPA be a single model for all topologies (foundation model) or fine-tuned per grid? GridSFM's approach (train on diverse grids, no fine-tuning at deployment) is the foundation model vision. For zap's planning use case, fine-tuning on the specific PyPSA network would be simpler and more accurate, but misses the generalization benefit.
 
-6. **Dual accuracy requirements for planning** (Iteration 2 analysis — no paper threshold found):
+6. **Dual accuracy requirements for planning** (RESOLVED conceptually in Iteration 4 — LP piecewise-constant gradient theorem):
 
-From-first-principles analysis of the MEP gradient ∇J(η) = γ + ∂z*(η)ᵀ · ∇h(z*(η)):
+The Iteration 2 analysis framed this as "what LMP MSE is needed?" The Iteration 4 analysis shows this is the **wrong question** for LP-based DC-OPF.
 
-For the **profit objective** (h = Σᵢ νᵢ*(η) · gᵢ*(η)):
-- Gradient error scales as: |∇J_surrogate − ∇J_exact| ∝ |ε_ν| · |g|
-- Sign flip (wrong investment direction) occurs when: |ε_ν| > |congestion_rent_of_marginal_line|
-- Typical congestion rents range $1–50/MWh; on a $40/MWh reference, Jami et al.'s 5–6% error = ~$2–3/MWh absolute error
-- **Verdict**: 5–6% LMP error is borderline — adequate for strongly congested lines (large rents) but unreliable for marginal investments at barely-congested lines
+**LP theorem (proven, not empirical)**: DC-OPF is an LP → planning gradient ∇J(η) is piecewise constant. Within each active-set region, gradient error = 0 regardless of LMP noise level. At active-set boundaries, gradient can flip sign — completely independent of LMP noise magnitude.
 
-For the **cost objective** (h = c(x*(η))):
-- Gradient depends on dual variables less directly (through ∂z*/∂η); LMP accuracy affects convergence rate but not correctness asymptotically if the surrogate is smooth
-- **Verdict**: Cost-objective planning is more forgiving than profit-objective
+**Revised question**: What active-set prediction accuracy is required?
 
-No empirical paper establishes the threshold. The required experiment: run Design B's planning loop with surrogate gradients at varying LMP accuracy levels; measure deviation from zap's exact KKT gradient using cosine similarity. Target: cosine similarity > 0.9 for investment decisions to be reliable.
+For the **profit objective**: gradient sign flip occurs when the surrogate misidentifies the active set (predicts a different set of binding line constraints). This can happen with 0.001% LMP error if the error is correlated with an active-set boundary crossing.
+
+For the **cost objective**: same LP structure — active set is what matters.
+
+**Empirical gap**: No paper directly measures the relationship between smooth LMP regressor error and active-set identification accuracy. A surrogate with 5–6% MSE could have high or low active-set accuracy depending on whether boundary scenarios are in the training set.
+
+**The required experiment** (designed, see `ralph/experiments/lmp_gradient_sensitivity.py`): Measure gradient cosine similarity empirically on IEEE 14-bus as a function of investment scale; demonstrate piecewise-constant structure; quantify smooth-surrogate bias at boundaries. Target: cosine similarity > 0.9 requires correct active-set identification, not just small LMP MSE.
+
+**ADMM warm-start (Designs A/C)**: For warm starts (not planning gradients), the LP theorem still applies differently — ADMM can cross active-set boundaries during iteration, so a wrong active set in the warm start adds iterations but does not prevent convergence. The relevant metric for warm-start LMP quality is: how many ADMM iterations does it take to reach the correct active set from the warm-started position?
 
 7. **OPFData DC-OPF compatibility**: ✅ *Resolved (Iteration 2)*. OPFData provides AC-OPF solutions — not directly compatible with zap's DC-OPF. For supervised training, the correct path is to re-solve DC-OPF on PGLib topologies using zap's `DispatchLayer` after converting networks to PyPSA format. OPFData can still be used for unsupervised Graph-JEPA pre-training (topology and load patterns are transferable even if exact AC duals are not). **Conversion path verified (Iteration 3)**: PyPSA 0.30.2 `import_from_pypower()` + `load_pypsa_network()`.
 
 8. **Value-guided JEPA for Design B**: Value-Guided JEPA (arXiv:2601.00844) shapes latent space so distance = cost-to-go. For Design B, training the predictor P such that latent distance encodes expected dispatch cost would make gradient descent in latent space equivalent to cost gradient descent — directly addressing the surrogate gradient bias problem. Requires: (a) access to cost values during training (available from zap), (b) a metric learning objective in addition to SIGReg. Not yet demonstrated for constrained optimization problems.
 
 9. **DINO-WM vs. LeWM for power grids**: ✅ *Resolved (Iteration 3)*. Neither DINO-WM nor LeWM is applicable to power grids in current form — both require pixel inputs. The correct adaptation is LeWM's architectural principle (end-to-end JEPA + Gaussian regularizer) applied with a GNN encoder. Graph World Model (arXiv:2507.10539, Jul 2025) is the closest prior work for graph-structured states, though untested on power grids. GridSFM-Open can serve as a pre-trained backbone for DC-OPF after replacing AC output heads, but requires fine-tuning.
+
+12. **NUMax–JEPA connection**: ✅ *Resolved (Iteration 4) — no connection*. NUMax (arXiv:2509.10722) solves convex resource allocation on communication/transport networks — distinct from power grid DC-OPF. Zero published literature connects NUMax objectives to JEPA embedding objectives. The vocabulary overlap ("network," "message passing," "latent") is misleading. The real adjacent research is ADMM-GNN unrolling (arXiv:2509.05288) for accelerating ADMM-based solvers — relevant to zap's ADMMLayer but independent of JEPA.
+
+13. **Verification landscape for Design A**: ✅ *Resolved (Iteration 4)*. Verification-informed training (alpha-CROWN, arXiv:2510.23196) is directly applicable to the JEPA encoder + OPF decoder stack during fine-tuning; achieves ≥50% worst-case violation reduction, first full certification to 793 buses. IBP (arXiv:2511.15624) scales to 8,316-bus SC-DCOPF — alternative path for large-scale certification. Both are safety layers on top of the JEPA encoder, not alternatives to it. The Chatzivasileiadis group's progression (2020→2022→2024→2025 PSCC) provides a clear roadmap.
+
+14. **Multi-period LMPs from learned surrogates with battery SOC**: ❓ *Open — confirmed gap*. No paper exists at this intersection. Design A/C for multi-period zap planning would be the first published work combining: (a) learned surrogate, (b) battery SOC hard constraints, (c) multi-period LMPs from KKT conditions. MPA-DNN covers (a)+(b) but not (c). Garcia et al. arXiv:2502.01844 covers (c) for single-period without storage.
 
 10. **Binding constraint coverage in training data**: ✅ *Resolved (Iteration 3)*. For ~100-node grids: 3–100 distinct active sets under typical operation. Tractable for classification, but uniform load sampling misses rare congestion regimes. Use RAMBO-style (arXiv:2304.10912) or OPF-Learn (arXiv:2111.01228) boundary sampling to ensure full active set coverage. This is critical for Design B's LMP accuracy near binding constraint boundaries.
 
@@ -800,7 +883,13 @@ Key verified citations:
 - Skenderi et al. arXiv:2309.36014 (TMLR) — Graph-JEPA for graph-level representation
 - Masip et al. arXiv:2606.09311 (Jun 2026) — FF-JEPA for long-horizon planning
 - Destrade et al. arXiv:2601.00844 (Dec 2025) — Value-guided JEPA planning
-- Giraud et al. arXiv:2510.23196 (Oct 2025, PSCC 2026) — Verification-informed AC-OPF NN
+- Giraud et al. arXiv:2510.23196 (Oct 2025, PSCC 2026) — Verification-informed AC-OPF NN; alpha-CROWN; ≥50% worst-case reduction; 793 buses
+- Tekeler et al. arXiv:2511.15624 (Nov 2025) — IBP for SC-DCOPF; 8,316-bus systems; certified gaps <3.98%
+- Nellikkath et al. arXiv:2405.06109 (May 2024) — Scalable exact OPF proxy verification; GPU MIP; >1000 buses
+- Kim, Kim, Kim arXiv:2510.09349 (Oct 2025) — MPA-DNN; hard SOC projection for multi-period DC-OPF; <0.024% optimality gap
+- Garcia et al. arXiv:2502.01844 (Feb 2025) — Transient-stability NN OPF; LMPs via KKT; discriminatory + uniform pricing
+- He et al. arXiv:2602.04643 (Feb 2026) — MTS-JEPA; multi-resolution JEPA for time series
+- Feng et al. arXiv:2509.05288 (Sep 2025) — ADMM-GNN acceleration; learning to accelerate distributed ADMM
 - Misra, Roald & Ng arXiv:1802.09639 (INFORMS J. Computing 2022) — Active set discovery; IEEE 118-bus = 3 active sets
 - Deka & Misra arXiv:1902.05607 (IEEE PowerTech 2019) — Neural net active set classification for DC-OPF
 - Ventura Nadal & Chevalier arXiv:2304.10912 (2023) — RAMBO; targeted boundary sampling finds 48–53 vs. 0–37 active sets

@@ -158,6 +158,26 @@ All sources verified via web search / primary source fetch. Date of verification
 
 ---
 
+---
+
+## K. Iteration 4 New Sources
+
+| # | Citation | URL | Credibility |
+|---|----------|-----|-------------|
+| K1 | Giraud, Nellikkath, Vorwerk, Alowaifeer, Chatzivasileiadis. "Neural Networks for AC OPF: Improving Worst-Case Guarantees during Training." PSCC 2026. arXiv:2510.23196. Oct 2025. | https://arxiv.org/abs/2510.23196 | High: PSCC peer-reviewed; alpha-CROWN; ≥50% worst-case reduction; 793-bus systems |
+| K2 | Tekeler, Zhong, Zhang, Chevalier. "Fast and Certified Bounding of SC-DCOPF via Interval Bound Propagation." arXiv:2511.15624. Nov 2025. | https://arxiv.org/abs/2511.15624 | Medium-High: preprint; IBP for SC-DCOPF; certified gaps <3.98%; scales to 8,316-bus |
+| K3 | Nellikkath, Tanneau, Van Hentenryck, Chatzivasileiadis. "Scalable Exact Verification of Optimization Proxies for AC OPF." arXiv:2405.06109. May 2024. | https://arxiv.org/abs/2405.06109 | High: GPU MIP; >1000 buses; order-of-magnitude scale improvement |
+| K4 | Nellikkath & Chatzivasileiadis. "Minimizing Worst-Case Violations of Neural Networks for AC Optimal Power Flow." arXiv:2212.10930. 2022. | https://arxiv.org/abs/2212.10930 | High: 39–162 buses; differentiable worst-case training loop |
+| K5 | Venzke, Qu, Low, Chatzivasileiadis. "Learning Optimal Power Flow: Worst-Case Guarantees for Neural Network Solutions." arXiv:2006.11029. 2020. | https://arxiv.org/abs/2006.11029 | High: first MILP worst-case guarantee framework for NN-OPF; ≤300 buses |
+| K6 | Kim, Kim, Kim. "MPA-DNN: Projection-Aware Unsupervised Learning for Multi-Period DC-OPF." arXiv:2510.09349. Oct 2025. | https://arxiv.org/abs/2510.09349 | Medium-High: preprint; full HTML verified; SOC hard constraint via lower-triangular projection; <0.024% gap; 39-bus 24h |
+| K7 | Garcia, LoGiudice, Parker, Bent. "Transient Stability-Constrained OPF: Neural Network Surrogate Models and Pricing Stability." arXiv:2502.01844. Feb 2025. | https://arxiv.org/abs/2502.01844 | Medium-High: preprint; LMPs from KKT of NN-augmented OPF; discriminatory + uniform pricing; LANL/Texas A&M |
+| K8 | He et al. "MTS-JEPA: Multi-resolution JEPA for Multivariate Time Series Anomaly Detection." arXiv:2602.04643. Feb 2026. | https://arxiv.org/abs/2602.04643 | Medium: preprint; JEPA applied to multivariate time series; anomaly detection; not power grids |
+| K9 | Feng et al. "Learning to Accelerate Distributed ADMM Using Graph Neural Networks." arXiv:2509.05288. Sep 2025. | https://arxiv.org/html/2509.05288v1 | Medium-High: preprint; ADMM-GNN unrolling; directly relevant to zap ADMMLayer acceleration |
+| K10 | Chen, Zhao, Tanneau, Van Hentenryck. "Compact Optimality Verification for Optimization Proxies." ICML 2024. arXiv:2405.21023. | https://arxiv.org/abs/2405.21023 | High: ICML peer-reviewed; MIP-based verification with gradient heuristics; large-scale DC-OPF |
+| K11 | Sreekumar, Degleris, Rajagopal. "Large-Scale Network Utility Maximization via GPU-Accelerated Proximal Message Passing." arXiv:2509.10722. 2025. (NUMax ruling) | https://arxiv.org/abs/2509.10722 | High: primary source (zap repo); NUMax is convex resource allocation on transport networks, NOT power grid / JEPA related |
+
+---
+
 ## Notes on Credibility Assessment
 
 - **High**: peer-reviewed venue (ICLR, NeurIPS, AAAI, IEEE TPWRS, EPSR, JMLR, Joule/Cell) or official organization blog/repo with primary data

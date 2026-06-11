@@ -640,6 +640,207 @@ class DCWarmStartHead(nn.Module):
 
 ---
 
+## Iteration 4 New Findings
+
+### Battery/Storage Code Analysis (verified from zap source)
+
+**Files**: `zap/devices/storage_unit.py`, `zap/devices/dual/store.py`, `zap/admm/basic_solver.py`
+
+**StorageUnit variables** (named tuple `StorageUnitVariable`):
+- `energy`: (num_devices, T+1) — SOC values including boundary conditions
+- `charge`: (num_devices, T) — charging power
+- `discharge`: (num_devices, T) — discharging power
+
+**SOC evolution constraint** (Iteration 4 — verified from code lines 137–147):
+```
+energy[t+1] = energy[t] + charge[t] * charge_efficiency - discharge[t] / discharge_efficiency
+energy[0]  = initial_soc * (power_capacity * duration)
+energy[T]  = final_soc  * (power_capacity * duration)
+0 ≤ energy ≤ power_capacity * duration    (SOC bounds)
+0 ≤ charge, discharge ≤ power_capacity    (power bounds)
+power[0] = discharge - charge              (net injection)
+```
+This is a **linear constraint system** — the SOC evolution is strictly linear (for fixed efficiency parameters), enabling the ADMM Schur complement acceleration.
+
+**DualBattery** (`zap/devices/dual/store.py`):
+- Dual variable: `λ ∈ ℝ^(n_devices × T)` — intertemporal shadow price of stored energy
+- Operation cost (dual):
+  - Charging cost: `-z - rho*λ` (negative when it's profitable to charge)
+  - Discharging cost: `λ + z - c_lin` (positive when it's profitable to discharge)
+  - SOC continuity dual: `λ[t] - λ[t+1]` for each interior t
+  - Boundary duals: `-λ[0] * initial_soc * smax`, `+λ[-1] * final_soc * smax`
+
+**ADMM Schur complement acceleration** (`zap/devices/storage_unit.py` lines 320–424):
+- Battery proximal update: inner ADMM loop over T timesteps
+- Uses precomputed Schur complement for the coupled (charge, discharge, energy) system
+- JIT-compiled inner loop: `battery_prox_inner(x, y, u, rhs, schur, ymin, ymax, w, alpha)`
+- Windowed: full_T = window × num_scenarios; enables parallelism across independent scenarios
+
+**Implications for NeuralWarmStart (Design C) with batteries**:
+
+For a pure generator/line problem: warm start requires `dual_power` (LMPs) + `power` per device.
+
+For a multi-period battery problem: warm start additionally requires:
+- Per-battery `local_variables` = (energy, charge, discharge) — the SOC trajectory
+- Per-battery inner ADMM variables (x, y, u) — implicitly set to consistent initial values
+- The SOC trajectory must be temporally consistent: `energy[0] = initial_soc * smax`
+
+This substantially increases the warm-start prediction complexity. The `dual_power` Tensor alone is not sufficient for multi-period battery problems — the full `local_variables` state is needed for efficient ADMM convergence.
+
+**Temporal structure**: For 24-hour battery dispatch with N batteries:
+- `energy`: (N, 25) — 25 SOC values (T+1)
+- `charge`: (N, 24) — 24 charging timesteps
+- `discharge`: (N, 24) — 24 discharging timesteps
+- `λ_battery`: (N, 24) — intertemporal shadow prices
+
+A TS-JEPA or FF-JEPA temporal encoder is naturally suited to predicting these trajectories, since they are sequences over the 24-hour horizon.
+
+---
+
+### Multi-Period OPF Surrogates with Battery Storage (Iteration 4 — Survey)
+
+**Key finding: This intersection is nearly vacant in the literature.**
+
+**MPA-DNN** (arXiv:2510.09349, Kim, Kim, Kim, KENTECH, Oct 2025):
+- The ONLY paper found that embeds SOC temporal coupling as a HARD CONSTRAINT in a learned OPF surrogate
+- **SOC mechanism**: QP projection layer with lower-triangular propagation matrix S (cumulative sum operator over T): `S ⊗ [η^ch U^ch - U^dis/η^dis]` propagates SOC recurrence across all T timesteps simultaneously
+- Covers: power balance, generator capacity, ramp-rate, SOC bounds, SOC dynamics, line limits — all in one projection
+- Gradients through the projection via KKT conditions (duals computed for gradient propagation only — NOT reported as LMPs)
+- **Results**: <0.024% optimality gap, max absolute error ≤0.016 p.u., zero ramp violations (13–140 for baseline SPA-DNN)
+- **Test system**: IEEE 39-bus, 24-hour horizon
+- **No speedup numbers** (explicitly deferred to future work)
+- **DC-OPF only** (not AC)
+
+**Spatio-Temporal GAT+TCN for multi-period AC-OPF** (MDPI Electronics, Feb 2026):
+- Graph Attention Network (spatial) + Temporal Convolutional Network (temporal) for 8/24-hour horizons
+- 500-bus and 1354-bus test systems
+- Could not verify SOC handling in detail (paper behind access control)
+- No LMPs reported
+
+**Transient-stability-constrained OPF with NN surrogate AND LMPs** (arXiv:2502.01844, Garcia, LoGiudice, Parker, Bent, LANL/Texas A&M, 2025):
+- Directly relevant PRECEDENT for computing LMPs from a NN-augmented OPF
+- Develops discriminatory and uniform pricing structures from KKT/Lagrange multipliers of a NN-encoded stability-constrained OPF
+- Single-period AC-OPF, no storage/SOC
+- **Key finding**: confirms that KKT-based LMP derivation from NN-augmented OPF constraints is feasible and produces economically meaningful prices
+
+**MTS-JEPA** (arXiv:2602.04643, He et al., 2026): Multi-resolution JEPA for multivariate time series anomaly detection. Not power systems. Confirms JEPA family is being extended to multivariate time series (relevant if extended to grid dispatch sequences).
+
+**Critical gaps confirmed**:
+1. No paper computes multi-period LMPs/duals from a learned surrogate WITH battery SOC — this intersection is completely empty
+2. No JEPA or world-model approach applied to multi-period OPF with storage
+3. No AC-OPF surrogate with explicit SOC projection (MPA-DNN is DC only)
+4. MPA-DNN doesn't report speedup — unclear if the QP projection overhead makes it faster than just solving the DC-OPF
+
+**Implications for Design C (NeuralWarmStart with batteries)**:
+- MPA-DNN's lower-triangular SOC propagation matrix is a template for encoding SOC constraints in the NeuralWarmStart's predicted local_variables
+- The warm-start should predict (energy, charge, discharge) trajectories that satisfy: `energy[t+1] = energy[t] + charge[t]*η_c - discharge[t]/η_d`
+- A simple heuristic: use the predicted average power to scale a smooth SOC trajectory respecting bounds, then let early ADMM iterations correct for accuracy
+
+---
+
+### LP Gradient Discontinuity Theorem (key theoretical finding, Iteration 4)
+
+**Critical insight for Design B**: DC-OPF is a **linear program** (LP). For linear programs, the optimal solution z*(η) and the dual variables λ*(η) are piecewise linear functions of the parameters η. Therefore, the **planning gradient ∇J(η) is PIECEWISE CONSTANT**.
+
+**Theorem (LP sensitivity theorem, textbook result)**:
+For an LP parameterized by cost/RHS/matrix coefficients, the optimal solution (primal + dual) is:
+1. Piecewise linear in parameters (within each active set region)
+2. Constant gradient WITHIN each active set region
+3. Discontinuous (potentially jumping by any amount) AT active set boundaries
+
+**Consequence for Design B surrogate planning**:
+- **LMP MSE is the WRONG metric**. A surrogate with 5–6% LMP error (Jami et al., arXiv:2306.10080) but correct active-set identification → ZERO gradient bias
+- **Active-set prediction accuracy is the RIGHT metric**. A surrogate with <1% LMP error but wrong active-set identification → planning gradient can be completely wrong (including sign flips)
+- **Smooth surrogates are structurally biased at boundaries**: A neural network with smooth activation functions (ReLU-based or sigmoid) produces smooth gradients even where the LP gradient is discontinuous. At every active-set boundary in the training domain, the surrogate gradient is a weighted average of the two adjacent gradient values — which is wrong for BOTH.
+
+**Quantitative implication**:
+For 100-node grid with ~50 distinct active sets (RAMBO result): boundary regions cover approximately 1–5% of the operating domain by volume but can cover 20–50% of the important (near-congestion) regime. A surrogate that misidentifies the active set at boundary scenarios produces gradient errors that can range from 10% to sign-flip (180° error).
+
+**Implications for Design A and C** (warm-start, not planning gradient):
+- For Design A (JEPA → exact KKT head): LP discontinuity is irrelevant — the KKT layer determines the active set from the actual dispatch solution. The surrogate encoder produces the OPF parameters; the solver finds the correct active set.
+- For Design C (warm-start): LP discontinuity means the warm-start dispatch should predict which active set the solution will lie in. An incorrect warm start that puts ADMM on the wrong side of an active-set boundary will require extra iterations to cross it — but ADMM will still converge to the correct solution.
+
+**Experiment designed** (see `ralph/experiments/lmp_gradient_sensitivity.py`):
+- Experiment 1: Scan scale parameter space, show gradient is piecewise constant (LP fact)
+- Experiment 2: Simulate smooth surrogate, measure gradient bias at active-set boundaries
+- Experiment 3 (pseudocode): ADMM warm-start sensitivity to LMP noise
+
+---
+
+### NUMax–JEPA Connection: Ruled Out (Iteration 4)
+
+**Research question**: Is there a theoretical or practical connection between NUMax (Network Utility Maximization, arXiv:2509.10722) and JEPA representation learning objectives?
+
+**Verdict: NO meaningful connection exists.**
+
+NUMax (Sreekumar, Degleris, Rajagopal, 2025) solves:
+- Convex resource allocation on communication/transport networks
+- Utility functions over link flows, capacity constraints
+- Not a power grid / DC-OPF formulation (generalization of transport, not electrical)
+- Solved via GPU-accelerated ADMM with sparse matrix operations
+
+JEPA (Balestriero & LeCun, 2025) provides:
+- Distributional result: isotropic Gaussian embeddings minimize downstream prediction risk
+- No network topology, no flow constraints, no capacity constraints
+
+**Literature check**: Zero results for "NUMax JEPA", "network utility maximization joint embedding", or related cross-domain combinations. These are entirely separate research communities.
+
+**Adjacent REAL connection** (arXiv:2509.05288, "Learning to Accelerate Distributed ADMM Using Graph Neural Networks"): GNN-based ADMM acceleration exists as a real research area — neural networks predict ADMM step sizes, dual variable trajectories, or convergence behavior, using the graph structure of the ADMM problem. This is genuinely relevant to zap's ADMMLayer but is NOT the JEPA connection proposed.
+
+**Conclusion**: The NUMax–JEPA connection was a speculative vocabulary overlap ("network", "message passing", "latent"). The correct framing is: ADMM-GNN acceleration (arXiv:2509.05288) for Design C, not JEPA objectives for NUMax.
+
+---
+
+### Verification-Informed Training (arXiv:2510.23196, PSCC 2026) — Deep Dive
+
+**Paper**: Giraud, Nellikkath, Vorwerk, Alowaifeer, Chatzivasileiadis. "Neural Networks for AC OPF: Improving Worst-Case Guarantees during Training." PSCC 2026. arXiv:2510.23196.
+
+**Mechanism**:
+1. **alpha-CROWN bound propagation** (VNN-COMP 2024 winner): propagates certified bounds on NN outputs through all layers — gives certified worst-case constraint violation across the entire input domain (not just sampled batches)
+2. **McCormick relaxations** for AC power flow bilinear terms (V_i × V_j products in power flow equations)
+3. **alpha-max beta-min** for phasor magnitude terms (novel extension)
+4. Worst-case certified violation bounds added as penalty term in training loss
+5. Two inference-time restoration strategies: least-squares projection + IPOPT warm-start
+
+**Reported results**:
+- ≥50% worst-case violation reduction vs. baseline NN
+- First-ever full constraint verification (all operational constraints) up to **793 buses**
+- Complete elimination of violations for smaller systems (57-bus, 118-bus)
+
+**Grid sizes tested**: PGLib-OPF case57, case118, case793
+
+**Lineage** (Chatzivasileiadis group, verified):
+| Paper | Year | Key contribution | Scale |
+|-------|------|-----------------|-------|
+| Venzke et al. arXiv:2006.11029 | 2020 | First MILP worst-case guarantee framework | ≤300 buses |
+| Nellikkath 2021 arXiv:2107.00465 | 2021 | Physics-informed NNs for DC-OPF | PGLib |
+| Nellikkath 2022 arXiv:2212.10930 | 2022 | Training minimizing worst-case violations | 39–162 buses |
+| Nellikkath et al. arXiv:2405.06109 | 2024 | Scalable exact verification via GPU MIP | >1000 buses |
+| **Giraud et al. arXiv:2510.23196** | **2025** | **alpha-CROWN + McCormick; 50%+ reduction; full certification** | **57–793 buses** |
+
+**NEW paper found** (arXiv:2511.15624, Tekeler et al., 2025): IBP for Security-Constrained DC-OPF. Uses Interval Bound Propagation (simpler than CROWN but faster) to certify SC-DCOPF objective bounds simultaneously for all N-1 contingencies. Certified gaps <3.98% on small cases; scales to **8,316-bus systems**. Directly applicable to zap's DC-OPF + N-k contingency formulation.
+
+**NEW paper found** (arXiv:2405.21023, Chen et al., ICML 2024): Compact Optimality Verification for optimization proxies. MIP-based with gradient heuristics; tested on large-scale DC-OPF and knapsack. Scales to thousands of buses.
+
+**Applicability to Design A (JEPA encoder + OPF head)**:
+- alpha-CROWN can propagate bounds through an encoder+decoder stack if encoder uses piecewise-linear activations (ReLU networks)
+- Transformer-style attention (softmax) complicates verification — extra overhead
+- Input domain specification: must specify latent space bounds (use interval over training data outputs as conservative estimate)
+- Practical recommendation: apply verification-informed training during the supervised fine-tuning phase on the full $f_\theta \circ g_\phi$ stack
+
+**Comparison to alternatives for Design A/B**:
+| Method | Guarantee type | Domain-wide? | Scalability |
+|--------|---------------|--------------|-------------|
+| Active set classification | None (wrong → wrong solution) | No | Medium |
+| DC3/E2ELR | Structural (architectural) | No | Large |
+| Homeomorphic projection | Structural 100% | No | Medium |
+| Verification-informed (arXiv:2510.23196) | **Certified bounds** | **Yes** | 57–793 buses |
+| IBP for SC-DCOPF (arXiv:2511.15624) | Certified bounds (DC only) | Yes | 8,316 buses |
+
+**Assessment for this project**: Verification-informed training is primarily relevant as a final safety layer on top of Design A's OPF decoder — it strengthens guarantees for the learned OPF parameter decoder. It does NOT eliminate the fundamental active-set boundary problem for Design B (the surrogate gradient is still smooth and wrong at LP discontinuities, regardless of constraint certification).
+
+---
+
 ### DINO-WM vs. LeWorldModel for Non-Visual Domains (Iteration 3)
 
 #### DINO-WM (arXiv:2411.04983, ICML 2025)

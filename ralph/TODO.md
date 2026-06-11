@@ -46,19 +46,27 @@
 - [x] Write MATPOWER → PyPSA conversion pipeline — VERIFIED: PyPSA 0.30.2 import_from_pypower() + load_pypsa_network() is the path; pandapower.converter.from_mpc() for arbitrary .m files
 - [x] Clarify zap DC vs. AC scope (critical correction to earlier iterations): ACLine = DC power flow approximation, no reactive power or voltage magnitudes
 
+## Completed (Iteration 4)
+
+- [x] Design LMP accuracy threshold experiment (ralph/experiments/lmp_gradient_sensitivity.py): LP discontinuity = key insight; MSE is wrong metric; active-set prediction accuracy is the right metric
+- [x] Analyze zap battery/storage code: SOC evolution constraint, DualBattery intertemporal dual, ADMM Schur complement for batteries, warm-start complexity for multi-period
+- [x] Rule out NUMax-JEPA connection: NUMax is convex resource allocation on communication networks; no bridge to JEPA embedding objectives; adjacent real work = ADMM-GNN unrolling (arXiv:2509.05288)
+- [x] Deep-dive verification-informed training (arXiv:2510.23196, PSCC 2026): alpha-CROWN bound propagation + McCormick relaxations; ≥50% worst-case violation reduction; 793-bus systems; applicable to Design A encoder+head stack
+- [x] Survey broader verification landscape: Nellikkath & Chatzivasileiadis 2022/2024, IBP for SC-DCOPF (arXiv:2511.15624, 8316 buses), compact optimality verification (arXiv:2405.21023, ICML 2024)
+- [x] Document LP piecewise-constant gradient theorem and consequences for Design B
+
 ## Remaining High Priority
 
-- [ ] Verify SIGReg behavior for graph-structured latent spaces (theoretical gap — requires empirical test or theory extension; may not be solvable without experiments)
-- [ ] Formalize LMP accuracy threshold via experiment design: run zap's exact KKT gradient vs. surrogate gradient with varying LMP noise; measure cosine similarity at 1%, 2%, 5%, 10% LMP error levels — need to write experiment script
+- [ ] Verify SIGReg behavior for graph-structured latent spaces (theoretical gap — empirical test needed; may require running GNN-JEPA on a power grid synthetic dataset)
+- [ ] Survey energy storage / battery dispatch in LEARNED surrogates — specifically which papers handle SOC temporal coupling in neural OPF (likely MPA-DNN arXiv:2510.09349 and possibly TS-JEPA) — separate from zap code analysis above
 
 ## Medium Priority
 
-- [ ] Assess GridSFM fine-tuning feasibility in practice: load GridSFM-Open backbone, strip AC output heads, run on a small DC-OPF dataset from zap; does Hodge PE transfer? (would need code experiment)
-- [ ] Survey energy storage / battery dispatch in learned surrogates (multi-period SOC constraint handling) — relevant for multi-period zap planning
-- [ ] Explore connection between zap's NUMax formulation (arXiv:2509.10722) and JEPA objectives — NUMax is a max-flow problem; does the JEPA representation align with max-flow structure?
+- [ ] Assess GridSFM fine-tuning feasibility in practice: load GridSFM-Open backbone, strip AC output heads, run on a small DC-OPF dataset from zap; does Hodge PE transfer? (code experiment)
+- [ ] Implement RAMBO-style boundary sampling script for zap (generate training scenarios near thermal limits — critical for covering rare active-set patterns in Design B training data)
+- [ ] Implement and run lmp_gradient_sensitivity.py experiment on IEEE 14-bus to empirically validate LP piecewise-constant gradient theorem
 
 ## Low Priority / Future
 
-- [ ] Assess verification-informed training (arXiv:2510.23196, PSCC 2026) for worst-case constraint guarantee in Design A/B surrogates
-- [ ] Assess energy storage SOC constraint handling: which JEPA papers (TS-JEPA, FF-JEPA) can handle hard inequality constraints (SOC bounds) on multi-period trajectories?
-- [ ] Implement RAMBO-style boundary sampling script for zap (generate training scenarios that push near line thermal limits)
+- [ ] Assess energy storage SOC constraint handling: TS-JEPA (arXiv:2509.25449) and FF-JEPA (arXiv:2606.09311) for multi-period battery trajectories — both handle temporal prediction but NOT hard SOC inequality bounds
+- [ ] Explore IBP for DC-OPF in zap context: Tekeler et al. arXiv:2511.15624 certifies SC-DCOPF objective bounds; could this serve as a fast feasibility certificate for Design A/C predictions?

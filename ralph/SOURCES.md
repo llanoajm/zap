@@ -50,7 +50,7 @@ All sources verified via web search / primary source fetch. Date of verification
 |---|----------|-----|-------------|
 | D1 | Microsoft Research blog. "GridSFM: A new, small foundation model for the electric grid." May 13, 2026. | https://www.microsoft.com/en-us/research/blog/gridsfm-a-new-small-foundation-model-for-the-electric-grid/ | High: official Microsoft Research blog |
 | D2 | Microsoft Research. GridFM project page. | https://www.microsoft.com/en-us/research/project/gridfm/ | High: official |
-| D3 | GitHub: microsoft/GridSFM | https://github.com/microsoft/GridSFM | High: official; MIT licensed |
+| D3 | GitHub: microsoft/GridSFM | https://github.com/microsoft/GridSFM | High: official; MIT licensed; architecture verified from source code (model.py, blocks.py, dc_prior.py, hodge_pe.py) |
 | D4 | HuggingFace: microsoft/GridSFM_US_power_grid | https://huggingface.co/datasets/microsoft/GridSFM_US_power_grid | High: official data release |
 | D5 | Britto Mattos Lima et al. "Building Power Grid Models from Open Data: A Complete Pipeline from OpenStreetMap to Optimal Power Flow." arXiv:2605.04289. May 2026. | https://arxiv.org/abs/2605.04289 | High: companion paper to GridSFM |
 | D6 | ESG News: "Microsoft MISO deploy AI to modernize US power grid." Jan 6, 2026. | https://esgnews.com/microsoft-miso-deploy-ai-to-modernize-us-power-grid-as-data-center-and-electrification-demand-accelerates/ | Medium: news coverage of official partnership |
@@ -118,6 +118,12 @@ All sources verified via web search / primary source fetch. Date of verification
 | G9 | Hu et al. "Fast and Reliable N-k Contingency Screening with Input-Convex Neural Networks." arXiv:2410.00796. Oct 2024. | https://arxiv.org/abs/2410.00796 | High: 10-20× speedup, zero false negatives |
 | G10 | Anrrango et al. "Self-Supervised Learning of Parametric Approx for SC-DC-OPF." arXiv:2601.13486. Jan 2026. | https://arxiv.org/abs/2601.13486 | Medium: preprint |
 | G11 | "Gated GNN for AC Power Flow Under Topological Uncertainty." arXiv:2507.02078. Jul 2025. | https://arxiv.org/abs/2507.02078 | Medium: preprint |
+| G13 | Misra, Roald, Ng. "Learning for Constrained Optimization: Identifying Optimal Active Constraint Sets." arXiv:1802.09639. INFORMS J. Computing 34(1):463–480, 2022. | https://arxiv.org/abs/1802.09639 | High: peer-reviewed INFORMS; 15 networks 3–1951 buses; only 3 active sets for IEEE 118-bus |
+| G14 | Deka & Misra. "Learning for DC-OPF: Classifying active sets using neural nets." IEEE PowerTech 2019. arXiv:1902.05607. | https://arxiv.org/abs/1902.05607 | High: IEEE peer-reviewed; across PGLib-OPF, 4 test cases had >3 active sets; neural net classifier approach |
+| G15 | Ventura Nadal & Chevalier. "Scalable Bilevel Optimization for Generating Maximally Representative OPF Datasets (RAMBO)." arXiv:2304.10912. 2023. | https://arxiv.org/abs/2304.10912 | Medium-High: boundary sampling finds 48-53 vs. 0-37 active sets for 118-bus; uniform sampling misses rare regimes |
+| G16 | Joswig-Jones, Baker & Zamzam. "OPF-Learn: An Open-Source Framework for Creating Representative OPF Datasets." IEEE ISGT 2022. arXiv:2111.01228. | https://arxiv.org/abs/2111.01228 | High: IEEE peer-reviewed; NREL/OPFLearn.jl; maximizes active set variety in training data |
+| G17 | Stratigakos, Pineda, Morales & Kariniotakis. "Interpretable Machine Learning for DC Optimal Power Flow with Feasibility Guarantees." IEEE Trans. Power Systems 39(3):5126–5137, 2024. | https://hal.science/hal-04038380v4 | High: IEEE TPWRS peer-reviewed; prescriptive decision trees encoding binding constraints |
+| G18 | Feng, Wu, Lin, You. "Graph World Model." arXiv:2507.10539. Jul 2025. | https://arxiv.org/abs/2507.10539 | Medium: preprint; GNN-based world model for graph-structured state; not tested on power grids |
 
 ---
 
@@ -140,6 +146,15 @@ All sources verified via web search / primary source fetch. Date of verification
 | I2 | "Refining GNN Predictions Using Flow Matching for OPF." arXiv:2512.11127. Dec 2025. | https://arxiv.org/abs/2512.11127 | Medium-High: 0.07% cost gap, 100% feasibility on IEEE 30-bus |
 | I3 | "A Hard-Constrained NN Learning Framework for DC-to-AC OPF." arXiv:2602.06255. Feb 2026. | https://arxiv.org/html/2602.06255 | Medium-High: 40× speedup, 10⁻⁴ violation, PEGASE-9241 |
 | I4 | "Learning to Pursue AC OPF Solutions with Feasibility Guarantees." arXiv:2505.22399. May 2025. | https://arxiv.org/html/2505.22399v2 | Medium: preprint; safe gradient flow on 93-node distribution system |
+
+---
+
+## J. Visual World Models (DINO-WM, LeWM)
+
+| # | Citation | URL | Credibility |
+|---|----------|-----|-------------|
+| J1 | Zhou, Pan, LeCun, Pinto. "DINO-WM: World Models on Pre-trained Visual Features enable Zero-shot Planning." ICML 2025. arXiv:2411.04983. | https://arxiv.org/abs/2411.04983 | High: ICML peer-reviewed; visual only; frozen DINOv2; not applicable to power grids |
+| J2 | Maes, Le Lidec, Scieur, LeCun, Balestriero. "LeWorldModel." arXiv:2603.19312. Mar 2026, v3 Jun 2026. | https://arxiv.org/abs/2603.19312 | High: v3 updated; code at github.com/lucas-maes/le-wm; pixel-only; principle transferable to GNN |
 
 ---
 

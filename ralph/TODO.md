@@ -37,22 +37,28 @@
 - [x] Survey JEPA planning extensions: Value-Guided JEPA (arXiv:2601.00844) shapes latent metric = cost-to-go; addresses Design B surrogate gradient bias
 - [x] Add Graph-JEPA to landscape: arXiv:2309.36014, TMLR; masked subgraph prediction; directly applicable to power grid topology pre-training
 
+## Completed (Iteration 3)
+
+- [x] Investigate whether GridSFM's open model weights could serve as a pre-trained encoder for Design C/A — VERIFIED: 8-block HGNN, Hodge PE, SignedIncidenceConv, PyTorch/PyG; backbone extractable; requires fine-tuning for DC-OPF (AC/DC mismatch in features and output heads)
+- [x] Survey binding constraint pattern distribution — 3–53 distinct active sets for 118-bus under typical sampling; tractable for classification; RAMBO sampling essential for boundary coverage
+- [x] Assess whether zap can be extended to AC-OPF — CLARIFIED: zap's ACLine is DC power flow (B×Δθ), not full AC-OPF; AC extension would require significant refactoring; recommended path: DC layer + DC-to-AC correction NN (arXiv:2602.06255)
+- [x] Investigate DINO-WM vs. LeWM for power grid application — RESOLVED: neither applicable directly (both visual-only); LeWM principle (end-to-end JEPA + SIGReg) transferable to GNN encoder; Graph World Model (arXiv:2507.10539) is closest prior work
+- [x] Write MATPOWER → PyPSA conversion pipeline — VERIFIED: PyPSA 0.30.2 import_from_pypower() + load_pypsa_network() is the path; pandapower.converter.from_mpc() for arbitrary .m files
+- [x] Clarify zap DC vs. AC scope (critical correction to earlier iterations): ACLine = DC power flow approximation, no reactive power or voltage magnitudes
+
 ## Remaining High Priority
 
 - [ ] Verify SIGReg behavior for graph-structured latent spaces (theoretical gap — requires empirical test or theory extension; may not be solvable without experiments)
-- [ ] Investigate whether GridSFM's open model weights (github.com/microsoft/GridSFM) could serve as a pre-trained encoder for Design C/A — check architecture compatibility with HGNN interface
-- [ ] Formalize LMP accuracy threshold via experiment design: run zap's exact KKT gradient vs. surrogate gradient with varying LMP noise; measure cosine similarity at 1%, 2%, 5%, 10% LMP error levels
+- [ ] Formalize LMP accuracy threshold via experiment design: run zap's exact KKT gradient vs. surrogate gradient with varying LMP noise; measure cosine similarity at 1%, 2%, 5%, 10% LMP error levels — need to write experiment script
 
 ## Medium Priority
 
-- [ ] Survey binding constraint pattern distribution in PyPSA load_medium scenarios (how many distinct active sets? key insight for Design B data requirements)
-- [ ] Assess whether zap can be extended to AC-OPF (implicit differentiation of non-convex KKT); check arXiv:2602.06255 (hard-constrained DC→AC NN) as OPF head substitute
-- [ ] Investigate DINO-WM vs. LeWM for power grid application (frozen encoder vs. end-to-end training); LeWM has public code at github.com/lucas-maes/le-wm
-- [ ] Write MATPOWER → PyPSA conversion script skeleton for PGLib import into zap
+- [ ] Assess GridSFM fine-tuning feasibility in practice: load GridSFM-Open backbone, strip AC output heads, run on a small DC-OPF dataset from zap; does Hodge PE transfer? (would need code experiment)
+- [ ] Survey energy storage / battery dispatch in learned surrogates (multi-period SOC constraint handling) — relevant for multi-period zap planning
+- [ ] Explore connection between zap's NUMax formulation (arXiv:2509.10722) and JEPA objectives — NUMax is a max-flow problem; does the JEPA representation align with max-flow structure?
 
 ## Low Priority / Future
 
-- [ ] Assess AC-OPF feasibility restoration layers (arXiv:2602.06255) for Design A with AC extension
-- [ ] Survey energy storage / battery dispatch in learned surrogates (multi-period SOC constraint handling)
-- [ ] Explore connection between zap's NUMax formulation (arXiv:2509.10722) and JEPA objectives
 - [ ] Assess verification-informed training (arXiv:2510.23196, PSCC 2026) for worst-case constraint guarantee in Design A/B surrogates
+- [ ] Assess energy storage SOC constraint handling: which JEPA papers (TS-JEPA, FF-JEPA) can handle hard inequality constraints (SOC bounds) on multi-period trajectories?
+- [ ] Implement RAMBO-style boundary sampling script for zap (generate training scenarios that push near line thermal limits)

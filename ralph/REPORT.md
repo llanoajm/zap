@@ -1,8 +1,8 @@
 # JEPA-Style World Models as AC-OPF Surrogates and Latent-Space Planners
-## Research Report — Ralph Loop, Iteration 2
+## Research Report — Ralph Loop, Iteration 3
 
 **Date**: 2026-06-11  
-**Status**: UPDATED — Iteration 2 adds: temporal/graph JEPA extensions; "Not All Warm Starts Help" quantitative findings; concrete NeuralWarmStart code skeleton from actual ADMMState structure; Design A DispatchLayer interface; OPFData DC-OPF compatibility analysis; LMP accuracy threshold analysis.
+**Status**: UPDATED — Iteration 3 adds: GridSFM architecture deep-dive (7 node types, 8-block HGNN, Hodge PE, SignedIncidenceConv, DC prior); GridSFM × zap compatibility analysis for Design A/C; critical clarification that zap uses DC power flow (not true AC-OPF); MATPOWER → PyPSA → zap conversion pipeline; binding constraint pattern analysis; DINO-WM vs. LeWM for non-visual domains; AC-OPF extension assessment.
 
 ---
 
@@ -17,6 +17,8 @@ This report assesses whether **LeJEPA-style joint-embedding predictive architect
 **Critical finding on duals**: The WARP benchmark (2026) proves that primal-only warm starts **fail** — full primal+dual prediction is necessary for interior-point speedup, and primal-only can cause solver divergence. This elevates dual variable modeling from "nice to have" to architecturally required.
 
 **Critical finding on LeWorldModel**: It is real, open-sourced, and achieves 48× planning speedup vs. DINO-WM on continuous-action robotic tasks — but none of the JEPA planning literature handles hard constraints on the action space, which are ubiquitous in power dispatch.
+
+**Iteration 3 clarifications**: (a) Zap's `ACLine` implements DC power flow (B×Δθ), not full AC-OPF — all three designs target DC-OPF duals (active power LMPs, angle duals). (b) GridSFM's full architecture is now verified from source code: 8-block HGNN with Hodge PE, SignedIncidenceConv, DC prior — compatible with zap as a pre-trained backbone after fine-tuning for DC-OPF. (c) Binding constraint active sets are tractable: ~3–53 for 118-bus grids under typical operation; RAMBO-style sampling is required to cover rare congestion regimes. (d) Neither DINO-WM nor LeWM is directly applicable to power grids (both visual-only); LeWM's end-to-end JEPA principle with a GNN encoder is the correct adaptation. (e) MATPOWER → PyPSA → zap conversion pipeline is confirmed via PyPSA 0.30.2's `import_from_pypower()`.
 
 ---
 
@@ -112,6 +114,35 @@ Architecture: GNNs + transformer; self-supervised pre-training via masked recons
 
 This is the largest public AC-OPF dataset with topology variation. Purpose: enable training of high-capacity data-driven AC-OPF models at realistic scales, filling the gap that previous open datasets left.
 
+#### GridSFM Architecture (verified from source code, Iteration 3)
+
+**Architecture class**: `GridTransformerBackbone` (`/model/gridsfm/model.py`)  
+**Framework**: PyTorch + PyTorch Geometric (PyG)
+
+**Core pattern**: Trunk-and-heads design. Trunk = 8 stacked `GridBlock` modules. Each block has:
+1. Linear Self-Attention (Performer-style, per node type, 4 heads) — O(N) w.r.t. nodes per graph
+2. Heterogeneous message passing: `SignedIncidenceConv` (for topological bus-branch-cycle edges, signed ±1 direction) + `SAGEConv` (mean aggregation for other edge types)
+3. Feed-forward MLP per node type (GELU, 4× expansion, residual)
+
+**Node types (7)**: `bus` (4 → 16 features), `generator` (11), `load` (2), `shunt` (2), `branch_ac` (9), `branch_tr` (11), `cycle` (4)  
+**Edge types (16)**: AC/transformer lines, generator/load/shunt-to-bus links, in_cycle (cycle-to-branch), and their reverses
+
+**Positional encodings**:
+- **Hodge PE**: 8-step diffusion over signed Hodge Laplacians (L0/L1/L2 per node type) → 8-dim embedding; encodes topological structure independent of grid size
+- **ER Landmark Moments**: Electrical resistance distances to 64 landmark buses → 5 statistics per bus
+- **DC OPF Features**: Voltage angles, angle stress, power injection from pre-cached DC power flow (SuperLU factorization)
+
+**Output heads (5)**:
+| Head | Output | Task |
+|------|--------|------|
+| `head_theta` | per-bus scalar | Voltage angle θ |
+| `head_V` | per-bus scalar | Voltage magnitude \|V\| |
+| `head_Pg` | per-generator scalar | Active dispatch Pg |
+| `head_Qg` | per-generator scalar | Reactive dispatch Qg |
+| `head_feas` | single logit | Feasibility probability |
+
+**Transfer learning**: Backbone loadable without output heads; intermediate embeddings accessible at all 8 block depths; `finetune_opfdata()` provides supervised fine-tuning on OPFData format; HuggingFace checkpoint `microsoft/GridSFM_Open` (MIT licensed).
+
 #### Topology-Aware GNN Surrogates
 
 **HH-MPNN** (Arowolo & Cremer, arXiv:2510.06860, Oct 2025 / Apr 2026):  
@@ -186,9 +217,21 @@ Shapes the embedding space during training so that a goal-conditioned value func
 
 **Relevance**: For Design B, encoding dispatch cost into the geometry of the latent space would make latent-space gradient descent align with cost minimization by construction. This addresses the "surrogate gradient bias" problem: if the latent metric encodes dispatch cost, then gradient descent in latent space *is* cost-gradient descent.
 
+### 1.5 DINO-WM vs. LeWorldModel for Power Grids (Iteration 3 Assessment)
+
+A key question for Design C/B: should the grid encoder be a frozen pre-trained model (like DINO-WM's approach) or trained end-to-end (like LeWM)?
+
+**DINO-WM** (Zhou et al., ICML 2025; arXiv:2411.04983): Frozen DINOv2 ViT (ImageNet-scale visual encoder) + trained latent transition model. **Inapplicable to power grids in any meaningful form** — DINOv2 encodes spatial image patches; power grid state is graph-structured tabular data with no visual structure. Using a frozen visual encoder on grid feature vectors would produce meaningless representations.
+
+**LeWorldModel** (Maes et al., arXiv:2603.19312; v3 Jun 2026): End-to-end JEPA from pixels, 2 losses (prediction + SIGReg), no frozen encoder. Also visual-only in current form. **However**, the architectural principle — end-to-end JEPA training with Gaussian regularizer, no stop-gradient, no EMA target network — is directly transferable to a GNN encoder for power grids. This is precisely the training recipe for Designs A/B/C applied to grid graph data.
+
+**Graph World Model** (Feng et al., arXiv:2507.10539, Jul 2025): First world model designed explicitly for **graph-structured state** using message-passing GNNs. Tested on recommendation systems and multi-agent scenarios — not power grids, but the architecture is the correct template.
+
+**Conclusion for power grids**: The correct analogy is LeWM's end-to-end JEPA principle applied with a GNN encoder — **not** a frozen visual encoder. There is no meaningful "frozen grid encoder" analogous to DINOv2 today. GridSFM-Open is the closest to a pre-trained backbone, but it was trained on AC-OPF and requires fine-tuning for DC-OPF (as analyzed in Design C above). Training a GNN-JEPA end-to-end on DC-OPF data is the natural starting point for all three designs.
+
 ---
 
-### 1.5 Differentiable Optimization Frameworks
+### 1.7 Differentiable Optimization Frameworks
 
 **OptNet** (Amos & Kolter, ICML 2017; arXiv:1703.00443): Differentiable QP layer. Backprop via implicit differentiation of KKT conditions — single KKT matrix solve per backward pass. GPU-accelerated primal-dual IP solver.
 
@@ -198,13 +241,26 @@ Shapes the embedding space during training so that a goal-conditioned value func
 
 **Relationship to zap**: zap's `PlanningProblemCVX.backward()` implements the same principle independently — implicit differentiation through KKT conditions via `layer.backward()`. This is architecturally equivalent to cvxpylayers but custom-built for power networks with awareness of the specific DC-OPF KKT structure.
 
-### 1.6 The `zap` Codebase
+### 1.8 The `zap` Codebase
 
 **Repository**: https://github.com/degleris1/zap  
 **Core papers**:
 - Degleris, El Gamal, Rajagopal, "GPU Accelerated Security Constrained Optimal Power Flow," arXiv:2410.17203, Oct 2024
 - Degleris, El Gamal, Rajagopal, "Gradient Methods for Scalable Multi-value Electricity Network Expansion Planning," arXiv:2404.01255, Apr 2024
 - Sreekumar, Degleris, Rajagopal, "Large-Scale Network Utility Maximization via GPU-Accelerated Proximal Message Passing," arXiv:2509.10722, 2025
+
+**Critical Clarification (Iteration 3 — verified from `zap/devices/transporter/ac_line.py`):**
+
+Despite the class name `ACLine`, zap implements **DC power flow (linearized AC)**, NOT full AC-OPF. The equality constraint is `p_line = B × Pnom × (θ_from - θ_to)` (susceptance × angle difference). Zap tracks:
+- ✅ Phase angles θ per bus (hence "AC lines")
+- ✅ Active power flows P
+- ✅ Thermal limits (line flow inequality constraints)
+- ❌ Reactive power Q — absent
+- ❌ Voltage magnitudes |V| — absent
+
+This matters for surrogate design: JEPA encoder and dual decoder predict DC-OPF quantities (P, θ, LMPs), not full AC-OPF quantities. GridSFM predicts |V|, Q — those output heads are not applicable to zap's DC-OPF and must be replaced for Design C/A fine-tuning.
+
+**For AC-OPF extension**: True AC-OPF would require adding Q, |V| variables and nonlinear power flow equations — a significant refactoring. The practical path for AC extension is: zap DC layer + hard-constrained DC-to-AC correction NN (arXiv:2602.06255, 40× speedup, <10⁻⁴ violations on PEGASE-9241) as a post-processing "AC head" in Design A.
 
 **Verified capabilities** (from source code):
 
@@ -437,6 +493,10 @@ The key prediction target is `dual_power` (shape `(num_nodes, T)`) — which equ
 - AC power flow physics must be embedded in the encoder; a purely statistical predictor may violate flow laws at initialization
 - Topology-general warm starts are less accurate than topology-specific ones — trade-off between generality and accuracy
 
+**GridSFM as pre-trained backbone for Design C** (Iteration 3 assessment): GridSFM's `GridTransformerBackbone` (PyTorch + PyG, 8-block HGNN, Hodge PE, available MIT licensed) is structurally compatible as an encoder for the `NeuralWarmStart`. However, it was trained on AC-OPF problems — output heads predict |V|, Q (reactive power) that zap's DC-OPF does not use. For Design C, the adaptation would be: (1) load backbone without AC output heads, (2) replace with `DCWarmStartHead` predicting `dual_power` (LMPs) and `power` (active dispatch) in DC-OPF units, (3) fine-tune on zap-generated DC-OPF data. The Hodge PE, cycle basis, and topological structure features from GridSFM-Open's pre-training should transfer, reducing fine-tuning data requirements compared to training from scratch.
+
+**Alternative**: Train the HGNN from scratch using the same architecture as GridSFM/HH-MPNN but purely on DC-OPF data. This avoids the AC/DC representation gap at the cost of needing more training data.
+
 **Feasibility verdict**: **VERY HIGH** — lowest risk, most incremental. WARP provides direct precedent. Direct integration via existing `ADMMLayer` warm-start interface. Measurable by ADMM convergence iteration curves.
 
 ---
@@ -523,18 +583,25 @@ This derivative is:
 
 **Quantitative implication**: Jami et al.'s direct regression achieves ~5–6% LMP error. If this error is uniformly distributed, 5–6% LMP accuracy is insufficient for warm starts (based on WARP's finding that primal-only diverges). Active set prediction (Pagnier, Chertkov) produces structurally consistent LMPs but depends on correct active set identification — which fails when binding constraint patterns are unseen during training.
 
+**Active set coverage** (Iteration 3 finding): For IEEE 118-bus under typical random sampling, only ~3–53 distinct active sets appear (Misra et al. 2022; RAMBO 2023). For a ~100-node zap grid: expect 3–100 distinct active sets. This is tractable for classification — a Design B surrogate CAN in principle learn to identify the correct active set if the training data covers the relevant binding patterns. Key risk: uniform random load perturbation misses rare congestion regimes. Use RAMBO-style boundary sampling (arXiv:2304.10912) to ensure full active set coverage during training. Without boundary sampling, the surrogate will fail precisely when congestion patterns most matter — near the boundaries where LMPs are most volatile.
+
 **For Designs A and C**: This problem is circumvented by ensuring the exact KKT layer always runs. Warm-start prediction error affects convergence speed but not solution quality. If the warm start is wrong, ADMM simply takes more iterations — it still converges to the correct LMPs.
 
 **For Design B**: This problem is fatal if dual decoder accuracy is insufficient. The planning gradient depends critically on LMP accuracy. Small LMP errors at constraint boundaries cause large planning gradient errors.
 
-### 5.2 AC Non-Convexity
+### 5.2 DC vs. Full AC: The Clarified Scope (Iteration 3)
 
-Zap implements DC-OPF (linearized power flow). Extending to AC-OPF introduces:
-- **Multiple local optima**: A surrogate trained on one solver's solutions may not cover all local optima
-- **Non-convex KKT conditions**: Necessary but not sufficient; AC-OPF can have spurious KKT points
-- **Voltage constraints**: reactive power and voltage magnitudes add another layer of coupling
+**Zap implements DC power flow (linearized AC)**, not full AC-OPF (verified from `zap/devices/transporter/ac_line.py`). Flow constraint: `P_line = B × Pnom × (θ_from - θ_to)`. No reactive power, no voltage magnitudes. This is important:
 
-For Design A/C with DC-OPF (the current zap implementation), this is not an issue. For AC-OPF extension, feasibility restoration layers (homeomorphic projection, arXiv:2512.11127, JMLR 2024) or hard-constrained NN corrections (arXiv:2602.06255) would be needed.
+- **Surrogate target is simpler**: DC-OPF LMPs depend only on active power balance + line flow limits. Full AC-OPF LMPs depend additionally on reactive power and voltage magnitudes — a harder prediction target. Designs A/B/C in this report target **DC-OPF** duals.
+- **DC-OPF is convex**: The LP structure means there is a unique optimal solution (in the non-degenerate case), KKT conditions are sufficient, and the active set determines LMPs exactly. No spurious local optima.
+
+For extending to **true AC-OPF** (the harder problem that GridSFM and IPOPT solve):
+- Adding Q, |V| variables requires completely new solver structure in zap
+- Non-convex KKT conditions: Necessary but not sufficient; AC-OPF can have spurious KKT points
+- Best path: zap DC-OPF layer + hard-constrained DC-to-AC correction NN (arXiv:2602.06255, 40× speedup on PEGASE-9241) as an "AC head" post-processing step in Design A
+
+For Designs A/C with DC-OPF (current zap), convexity and LP duality mean the failure modes are purely about: (a) dual prediction accuracy at constraint boundaries, (b) topology generalization, (c) approximation quality of the learned parameters. AC non-convexity is not relevant unless explicitly extending to AC.
 
 ### 5.3 Binding Constraint Pattern Coverage
 
@@ -613,10 +680,13 @@ Use PyPSA `load_medium` (~100 nodes), 24-hour snapshots, varied load profiles (�
 
 **Goal**: Train a JEPA encoder on diverse PGLib cases; demonstrate cross-topology <3% optimality gap and accurate LMPs (compare to HH-MPNN benchmark).
 
-**Data** (Iteration 2 clarification): OPFData (DeepMind, arXiv:2406.07234) uses AC-OPF (IPOPT/PowerModels.jl); zap is DC-OPF. These are **not directly compatible** for supervised training. Three options, in order of preference:
+**Data** (Iteration 2–3 clarification): OPFData (DeepMind, arXiv:2406.07234) uses AC-OPF (IPOPT/PowerModels.jl); zap is DC-OPF. These are **not directly compatible** for supervised training. Three options, in order of preference:
 1. Convert PGLib-OPF benchmark cases (14/30/57/118/300/500 bus) to PyPSA format and re-solve with zap's DC-OPF. This is the cleanest approach and produces exactly the target distribution (zap DC-OPF duals). The `load_pypsa_network()` function (`zap/importers/pypsa.py`) is the correct entry point.
+   - **Verified conversion path** (Iteration 3): PyPSA 0.30.2 has `pypsa.Network.import_from_pypower()`. For standard IEEE cases, use `from pypower.case14 import case14; net.import_from_pypower(case14())`. For PGLib `.m` files, use pandapower: `pc.from_mpc('pglib_case.m')` → PyPSA → `load_pypsa_network()`.
 2. Use OPFData's network topology and load scenarios, but discard AC solutions; re-solve DC with zap. ~3M scenarios across 10 grids with topology variation.
 3. Use OPFData AC solutions for Graph-JEPA unsupervised pre-training only (pattern representation learning), then re-solve DC with zap for fine-tuning. DC and AC active power flows are approximately consistent.
+
+**Binding constraint data coverage** (Iteration 3 finding — Misra et al. arXiv:1802.09639, Deka & Misra arXiv:1902.05607): For IEEE 118-bus under typical random load variation, only ~3–53 distinct active sets appear. For a ~100-node zap grid: expect 3–100 distinct active sets, depending on load range and sampling strategy. **Implication**: to achieve good coverage of all relevant active set patterns, use RAMBO-style targeted sampling (arXiv:2304.10912) or OPF-Learn boundary sampling (arXiv:2111.01228) rather than uniform load perturbation. Uniform sampling likely misses rare congestion regimes that produce the most informative LMP training examples.
 
 **Encoder**: HGNN (following OPF-HGNN / HH-MPNN architecture). Type-specific message passing, Transformer for long-range bus dependencies.
 
@@ -685,9 +755,15 @@ For the **cost objective** (h = c(x*(η))):
 
 No empirical paper establishes the threshold. The required experiment: run Design B's planning loop with surrogate gradients at varying LMP accuracy levels; measure deviation from zap's exact KKT gradient using cosine similarity. Target: cosine similarity > 0.9 for investment decisions to be reliable.
 
-7. **OPFData DC-OPF compatibility**: ✅ *Resolved (Iteration 2)*. OPFData provides AC-OPF solutions — not directly compatible with zap's DC-OPF. For supervised training, the correct path is to re-solve DC-OPF on PGLib topologies using zap's `DispatchLayer` after converting networks to PyPSA format. OPFData can still be used for unsupervised Graph-JEPA pre-training (topology and load patterns are transferable even if exact AC duals are not).
+7. **OPFData DC-OPF compatibility**: ✅ *Resolved (Iteration 2)*. OPFData provides AC-OPF solutions — not directly compatible with zap's DC-OPF. For supervised training, the correct path is to re-solve DC-OPF on PGLib topologies using zap's `DispatchLayer` after converting networks to PyPSA format. OPFData can still be used for unsupervised Graph-JEPA pre-training (topology and load patterns are transferable even if exact AC duals are not). **Conversion path verified (Iteration 3)**: PyPSA 0.30.2 `import_from_pypower()` + `load_pypsa_network()`.
 
 8. **Value-guided JEPA for Design B**: Value-Guided JEPA (arXiv:2601.00844) shapes latent space so distance = cost-to-go. For Design B, training the predictor P such that latent distance encodes expected dispatch cost would make gradient descent in latent space equivalent to cost gradient descent — directly addressing the surrogate gradient bias problem. Requires: (a) access to cost values during training (available from zap), (b) a metric learning objective in addition to SIGReg. Not yet demonstrated for constrained optimization problems.
+
+9. **DINO-WM vs. LeWM for power grids**: ✅ *Resolved (Iteration 3)*. Neither DINO-WM nor LeWM is applicable to power grids in current form — both require pixel inputs. The correct adaptation is LeWM's architectural principle (end-to-end JEPA + Gaussian regularizer) applied with a GNN encoder. Graph World Model (arXiv:2507.10539, Jul 2025) is the closest prior work for graph-structured states, though untested on power grids. GridSFM-Open can serve as a pre-trained backbone for DC-OPF after replacing AC output heads, but requires fine-tuning.
+
+10. **Binding constraint coverage in training data**: ✅ *Resolved (Iteration 3)*. For ~100-node grids: 3–100 distinct active sets under typical operation. Tractable for classification, but uniform load sampling misses rare congestion regimes. Use RAMBO-style (arXiv:2304.10912) or OPF-Learn (arXiv:2111.01228) boundary sampling to ensure full active set coverage. This is critical for Design B's LMP accuracy near binding constraint boundaries.
+
+11. **Zap DC-OPF vs. true AC-OPF scope**: ✅ *Resolved (Iteration 3)*. Zap's `ACLine` implements DC power flow (B × Δθ), not full AC-OPF. All three designs in this report target DC-OPF duals. AC-OPF extension requires new solver structure; the recommended path is DC layer + DC-to-AC correction NN (arXiv:2602.06255) as a post-processing step.
 
 ---
 
@@ -725,3 +801,10 @@ Key verified citations:
 - Masip et al. arXiv:2606.09311 (Jun 2026) — FF-JEPA for long-horizon planning
 - Destrade et al. arXiv:2601.00844 (Dec 2025) — Value-guided JEPA planning
 - Giraud et al. arXiv:2510.23196 (Oct 2025, PSCC 2026) — Verification-informed AC-OPF NN
+- Misra, Roald & Ng arXiv:1802.09639 (INFORMS J. Computing 2022) — Active set discovery; IEEE 118-bus = 3 active sets
+- Deka & Misra arXiv:1902.05607 (IEEE PowerTech 2019) — Neural net active set classification for DC-OPF
+- Ventura Nadal & Chevalier arXiv:2304.10912 (2023) — RAMBO; targeted boundary sampling finds 48–53 vs. 0–37 active sets
+- Joswig-Jones et al. arXiv:2111.01228 (IEEE ISGT 2022) — OPF-Learn; maximizing active set variety in datasets
+- Stratigakos et al. IEEE TPWRS 2024 — Interpretable ML for DC-OPF with feasibility guarantees
+- Zhou et al. arXiv:2411.04983 (ICML 2025) — DINO-WM; frozen DINOv2 + latent dynamics (visual only)
+- Feng et al. arXiv:2507.10539 (Jul 2025) — Graph World Model; GNN-based world model for graph-structured state

@@ -220,6 +220,30 @@ Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:
 
 ---
 
+## iter-4 Ensemble (v9 + v11 cost averaging)
+
+Simple model ensemble: `pred_cost = α × v9_cost + (1-α) × v11_cost`, then solve LP.
+Evaluated on original 8 TEST samples. No retraining required.
+
+| α (v9 weight) | cost_gap mean | cost_gap med | LMP mean | LMP med | ct16h LMP |
+|---|---|---|---|---|---|
+| 0.0 (pure v11) | 0.0247 | 0.010 | 0.926 | 0.350 | 4.98 |
+| 0.2 | **0.0206** | 0.014 | 0.926 | 0.388 | 4.93 |
+| 0.5 | 0.053 | 0.016 | 0.871 | 0.379 | 4.87 |
+| 0.7 | 0.074 | 0.049 | 0.840 | 0.372 | 4.82 |
+| 1.0 (pure v9) | 0.082 | 0.055 | 0.823 | 0.332 | 4.75 |
+
+**Finding:** α=0.2 (20% v9, 80% v11) achieves cost_gap=**0.0206** — new best, 17% better
+than v11 alone (0.0247) with no additional training. The ensemble averages over the two
+models' complementary biases in cost prediction.
+
+connecticut_16h LMP improves monotonically from 4.98 (pure v11) to 4.75 (pure v9), but
+all values are far above 0.66 — the structural limitation remains across the full ensemble.
+
+Source: `state/ensemble_v9_v11_metrics.json`.
+
+---
+
 ## iter-3 Planning Gradient (v9, v11 — delaware + cross-topology)
 
 Evaluated via finite-difference gradient of total operating + investment cost

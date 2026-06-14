@@ -1,0 +1,103 @@
+{
+  "experiment": "improve_v6_dc_frac_finetune",
+  "changes": [
+    "fine-tune v5 checkpoint for 100 more epochs at LR=1e-4",
+    "same architecture: h_gen + gen_dc_frac decoder",
+    "W_AUX=0.5, cosine anneal from LR=1e-4 to 1e-6"
+  ],
+  "training": {
+    "n_epochs": 100,
+    "best_epoch": 100,
+    "best_loss": 0.7247873367420706
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.1830375440433727,
+      "median": 0.08396319299936295
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.1238946757717606,
+      "median": 0.07584245502948761
+    },
+    "cost_gap": {
+      "mean": 0.016431218837209577,
+      "median": 0.00404558192608121
+    },
+    "lmp_mae": {
+      "mean": 0.3486687613561063,
+      "median": 0.14729955792427063
+    },
+    "power_balance_err": {
+      "mean": 4.0432242993957825e-08,
+      "median": 0.0
+    },
+    "decoder_deviation": {
+      "mean": 0.30349717041351276,
+      "median": 0.22676077409246748
+    }
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.2196721203625202,
+      "median": 0.1521786004304886
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.1819053716957569,
+      "median": 0.1556812897324562
+    },
+    "cost_gap": {
+      "mean": 0.19828570446439278,
+      "median": 0.11718939459431582
+    },
+    "lmp_mae": {
+      "mean": 1.77051382958889,
+      "median": 0.4131952226161957
+    },
+    "power_balance_err": {
+      "mean": 8.523610065904186e-08,
+      "median": 8.337348618535082e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.6009853866628798,
+      "median": 0.6122706106182705
+    }
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.2441241405904293,
+      "median": 0.1960461437702179
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.18547574523836374,
+      "median": 0.15301574766635895
+    },
+    "cost_gap": {
+      "mean": 0.14399381748270443,
+      "median": 0.07054328679511762
+    },
+    "lmp_mae": {
+      "mean": 0.9004222266376019,
+      "median": 0.3984333574771881
+    },
+    "power_balance_err": {
+      "mean": 8.54971911354544e-08,
+      "median": 8.337348618535082e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5901808140287645,
+      "median": 0.5793249840473557
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v6.pt"
+}

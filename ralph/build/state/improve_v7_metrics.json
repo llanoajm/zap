@@ -1,0 +1,184 @@
+{
+  "experiment": "improve_v7_rank_loss",
+  "changes": [
+    "pairwise ranking loss on pred_cost vs true_cost (W_RANK=0.2, margin=0.05)",
+    "150 epochs from scratch (v5 converged at 120; v6 fine-tune overfit)",
+    "same dc_frac decoder feature and W_AUX=0.5 as v5"
+  ],
+  "training": {
+    "n_epochs": 150,
+    "best_epoch": 150,
+    "best_loss": 0.8422802712473854
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.1537668184017909,
+      "median": 0.026421988382935524
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.10958448007219973,
+      "median": 0.059127749875187874
+    },
+    "cost_gap": {
+      "mean": 0.013906162717908366,
+      "median": 0.0014228379933352723
+    },
+    "lmp_mae": {
+      "mean": 0.39400299104368863,
+      "median": 0.12954206764698029
+    },
+    "power_balance_err": {
+      "mean": 4.350112626559388e-08,
+      "median": 0.0
+    },
+    "decoder_deviation": {
+      "mean": 0.3155531255253425,
+      "median": 0.23422821734556665
+    },
+    "per_sample": [
+      [
+        "montana_16h",
+        2.628782033920288,
+        0.037731181204227866
+      ],
+      [
+        "montana_04h",
+        2.5400941371917725,
+        0.03398584531126463
+      ],
+      [
+        "new_hampshire_04h",
+        1.2293057441711426,
+        0.00916373177963783
+      ],
+      [
+        "idaho_04h",
+        1.2157189846038818,
+        0.02076709929454018
+      ],
+      [
+        "alabama_16h",
+        1.1227327585220337,
+        0.022740979540147855
+      ]
+    ]
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.2485664151608944,
+      "median": 0.1653248816728592
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.20022678710520267,
+      "median": 0.1478300541639328
+    },
+    "cost_gap": {
+      "mean": 0.19531432556154896,
+      "median": 0.11877947992578139
+    },
+    "lmp_mae": {
+      "mean": 1.8900548631325365,
+      "median": 0.4811091274023056
+    },
+    "power_balance_err": {
+      "mean": 7.7017563257066e-08,
+      "median": 7.909685403579173e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5584438540229586,
+      "median": 0.566588462842781
+    },
+    "per_sample": [
+      [
+        "massachusetts_04h",
+        5.827781677246094,
+        0.3497219337528541
+      ],
+      [
+        "massachusetts_16h",
+        5.360285758972168,
+        0.7583213768565414
+      ],
+      [
+        "connecticut_16h",
+        5.1243720054626465,
+        0.15760980138035
+      ],
+      [
+        "kansas_04h",
+        0.5864834785461426,
+        0.33874399241575487
+      ],
+      [
+        "oregon_04h",
+        0.5205826759338379,
+        0.014799656696261057
+      ]
+    ]
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.27416878566145897,
+      "median": 0.25233762711286545
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.21332597034052014,
+      "median": 0.1616920307278633
+    },
+    "cost_gap": {
+      "mean": 0.10563749312576172,
+      "median": 0.0633219514201712
+    },
+    "lmp_mae": {
+      "mean": 0.9640601493883878,
+      "median": 0.43122559785842896
+    },
+    "power_balance_err": {
+      "mean": 7.522401938298457e-08,
+      "median": 4.517788022313897e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5542446725221245,
+      "median": 0.5046435180237381
+    },
+    "per_sample": [
+      [
+        "connecticut_16h",
+        5.1243720054626465,
+        0.15760980138035
+      ],
+      [
+        "kansas_04h",
+        0.5864834785461426,
+        0.33874399241575487
+      ],
+      [
+        "oregon_04h",
+        0.5205826759338379,
+        0.014799656696261057
+      ],
+      [
+        "oregon_16h",
+        0.4416355788707733,
+        0.043314811207787775
+      ],
+      [
+        "kansas_16h",
+        0.4208156168460846,
+        0.07994915847121278
+      ]
+    ]
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v7.pt"
+}

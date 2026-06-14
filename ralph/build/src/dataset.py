@@ -6,11 +6,12 @@ sample and cache the exact zap DC-OPF solution as supervised targets.
 
 Graph representation
 --------------------
-Node features  (n_bus × 4):
+Node features  (n_bus × 5):
   0  load_frac      — bus load / total system load     (sums to ≤ 1)
   1  gen_cap_frac   — gen pmax at bus / total gen cap  (sums to ≤ 1)
   2  degree_norm    — branch degree / max_degree
   3  is_ref         — 1 if reference/slack bus
+  4  dc_va_norm     — DC bus voltage angle / max(|angle|) — encodes congestion
 
 Edge features  (n_branch × 2):
   0  susc_norm      — susceptance / median susceptance
@@ -89,6 +90,11 @@ class GraphSample:
     # High fraction → cheap/baseload generator; ~0 → expensive or must-not-run.
     gen_dc_frac: np.ndarray      # (n_gen,)   float32  (clipped to [0, 1.5])
 
+    # DC bus voltage angles from GridSFM DC solution — encodes congestion pattern.
+    # Angle spread across a branch is proportional to DC power flow (P = B*(θi-θj)).
+    # Congested branches have large |θi-θj|; uncongested branches have near-zero angle diff.
+    dc_bus_va: np.ndarray        # (n_bus,)   float32  (normalized to [-1, 1])
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -114,6 +120,27 @@ def _device_index(devices, cls):
 # ---------------------------------------------------------------------------
 # Build one sample
 # ---------------------------------------------------------------------------
+
+def _extract_bus_angles(dc_path: str, bus_id_to_idx: dict, n_bus: int) -> np.ndarray:
+    """Extract DC bus voltage angles from dc_results.json, indexed by bus_idx."""
+    va = np.zeros(n_bus, dtype=np.float32)
+    if not dc_path or not os.path.exists(dc_path):
+        return va
+    try:
+        with open(dc_path) as f:
+            dc = json.load(f)
+        bus_sol = dc.get("solution", {}).get("bus", {})
+        for bus_id, bdata in bus_sol.items():
+            idx = bus_id_to_idx.get(str(bus_id))
+            if idx is not None and isinstance(bdata, dict) and bdata.get("va") is not None:
+                va[idx] = float(bdata["va"])
+    except Exception:
+        pass
+    max_abs = float(np.abs(va).max())
+    if max_abs > 1e-9:
+        va = va / max_abs  # normalize to [-1, 1]
+    return va
+
 
 def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
     model_path = os.path.join(data_dir, hour, f"{state}_model.json")
@@ -200,7 +227,15 @@ def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
     is_ref = np.zeros(n_bus, dtype=np.float32)
     is_ref[case.ref_bus_idx] = 1.0
 
-    node_feats = np.stack([load_frac, gen_cap_frac, degree_norm, is_ref], axis=1)  # (n_bus, 4)
+    # DC bus voltage angles — congestion signal: large |θi-θj| → heavily loaded branch
+    if case.target_va is not None:
+        va_raw = np.asarray(case.target_va).ravel().astype(np.float32)
+    else:
+        va_raw = np.zeros(n_bus, dtype=np.float32)
+    va_abs_max = float(np.abs(va_raw).max())
+    dc_va_norm = va_raw / max(va_abs_max, 1e-9)
+
+    node_feats = np.stack([load_frac, gen_cap_frac, degree_norm, is_ref, dc_va_norm], axis=1)  # (n_bus, 5)
 
     # --- Edge features ---
     med_susc = float(np.median(susc_arr)) if susc_arr.size else 1.0
@@ -234,6 +269,7 @@ def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
         target_lmp=lmps,
         target_obj=obj,
         gen_dc_frac=dc_frac,
+        dc_bus_va=dc_va_norm,
     )
 
 
@@ -267,6 +303,7 @@ def _save_sample(sample: GraphSample, cache_dir: str, state: str, hour: str):
         target_lmp=sample.target_lmp,
         target_obj=np.array([sample.target_obj]),
         gen_dc_frac=sample.gen_dc_frac,
+        dc_bus_va=sample.dc_bus_va,
     )
 
 
@@ -290,6 +327,7 @@ def _load_sample(cache_dir: str, state: str, hour: str) -> Optional[GraphSample]
         target_lmp=d["target_lmp"],
         target_obj=float(d["target_obj"][0]),
         gen_dc_frac=d["gen_dc_frac"] if "gen_dc_frac" in d else np.full(int(d["n_gen"][0]), 0.5, dtype=np.float32),
+        dc_bus_va=d["dc_bus_va"] if "dc_bus_va" in d else np.zeros(int(d["n_bus"][0]), dtype=np.float32),
     )
 
 

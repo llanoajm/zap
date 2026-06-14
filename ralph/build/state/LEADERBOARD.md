@@ -18,7 +18,8 @@ Plan_cos is evaluated on delaware (train state, same as P6 original).
 | iter3e | v10: deeper (4L, hidden 96) | 0.073 ✓ | 0.062 | 0.964 | 0.407 ✓ | ~0 | no improvement over v9 |
 | iter3f | v11: W_AUX=2.0 | **0.0247** ✓ | **0.010** | 0.926 | 0.350 ✓ | ~0 | **BEST cost_gap** |
 | iter3g | v12: + log_pmax decoder | 0.067 ✓ | 0.055 | 0.861 | 0.334 ✓ | ~0 | pmax marginal gain |
-| iter4a | ensemble α=0.2 (v9+v11) | **0.0206** ✓ | 0.014 | 0.926 | 0.388 ✓ | ~0 | **BEST cost_gap** no retrain |
+| iter4a | v13: +res_cap decoder feat | 0.0988 ✓ | 0.078 | 0.889 | 0.367 ✓ | ~0 | res_cap hurts (conflicting corr) |
+| iter4b | ensemble α=0.2 (v9+v11) | **0.0206** ✓ | 0.014 | 0.926 | 0.388 ✓ | ~0 | **BEST cost_gap** no retrain |
 | iter4b | ensemble α=0.5 (v9+v11) | 0.053 ✓ | 0.016 | 0.871 | 0.379 ✓ | ~0 | balanced blend |
 
 North star targets: cost_gap<0.20 ✓ (best 0.0206 ensemble α=0.2), LMP_MAE median<0.66 ✓ (best 0.332 v9), LMP_MAE mean<0.66 ✗ (best 0.823 v9 / blocked by ct16h), plan_cos>0.95 ✓ (v11=0.980 on training grid)

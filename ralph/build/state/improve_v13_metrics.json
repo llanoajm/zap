@@ -1,0 +1,154 @@
+{
+  "experiment": "improve_v13_res_cap",
+  "changes": [
+    "decoder input: h_gen + dc_frac + dc_res_cap_norm",
+    "dc_res_cap_norm = (1 - dc_frac) * pmax / max_pmax_system",
+    "W_AUX=1.5, W_RANK=0.2, 150 epochs",
+    "node_in=5, edge_in=3 (same as v9/v11)",
+    "Hypothesis: distinguishes 'large cheap gen not dispatched' from 'expensive gen'"
+  ],
+  "hyperparams": {
+    "W_AUX_COST": 1.5,
+    "W_RANK": 0.2,
+    "N_EPOCHS": 150,
+    "HIDDEN_DIM": 64,
+    "N_LAYERS": 3
+  },
+  "training": {
+    "n_epochs": 150,
+    "best_epoch": 148,
+    "best_loss": 1.50136835562572
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.16851977975137047,
+      "median": 0.05748413875699043
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.12868130705348502,
+      "median": 0.07378865033388138
+    },
+    "cost_gap": {
+      "mean": 0.025232349428438574,
+      "median": 0.008392389818899927
+    },
+    "lmp_mae": {
+      "mean": 0.4143867338733638,
+      "median": 0.14099778980016708
+    },
+    "power_balance_err": {
+      "mean": 4.614915956052222e-08,
+      "median": 6.172305616962035e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.37805864347337403,
+      "median": 0.24560495070957522
+    }
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.2198835059069097,
+      "median": 0.1457429900765419
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.17555668875575065,
+      "median": 0.1192314624786377
+    },
+    "cost_gap": {
+      "mean": 0.14657169977893048,
+      "median": 0.07820495815989359
+    },
+    "lmp_mae": {
+      "mean": 1.846985300630331,
+      "median": 0.44353628158569336
+    },
+    "power_balance_err": {
+      "mean": 9.144212796725404e-08,
+      "median": 9.545064516387793e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.4944523510127278,
+      "median": 0.5273587890083099
+    }
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.25067741610109806,
+      "median": 0.1457429900765419
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.18988546170294285,
+      "median": 0.1192314624786377
+    },
+    "cost_gap": {
+      "mean": 0.0987655327157177,
+      "median": 0.07820495815989359
+    },
+    "lmp_mae": {
+      "mean": 0.887739191763103,
+      "median": 0.36725112795829773
+    },
+    "power_balance_err": {
+      "mean": 8.477498181755644e-08,
+      "median": 8.83024000316109e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.48622574151383224,
+      "median": 0.4653941944351861
+    }
+  },
+  "per_sample_orig8": {
+    "connecticut_04h": {
+      "cost_gap": 0.006811453087945029,
+      "lmp_mae": 0.02022906392812729,
+      "power_balance_err": 1.1322270192164966e-07
+    },
+    "connecticut_16h": {
+      "cost_gap": 0.34668440392472916,
+      "lmp_mae": 5.009271144866943,
+      "power_balance_err": 1.5278242384884745e-07
+    },
+    "oregon_04h": {
+      "cost_gap": 0.07763351963186876,
+      "lmp_mae": 0.17764347791671753,
+      "power_balance_err": 9.035576044627794e-08
+    },
+    "oregon_16h": {
+      "cost_gap": 0.08529430237502811,
+      "lmp_mae": 0.15846610069274902,
+      "power_balance_err": 6.322368996720967e-08
+    },
+    "mississippi_04h": {
+      "cost_gap": 0.009034245890080402,
+      "lmp_mae": 0.551108181476593,
+      "power_balance_err": 8.624903961694386e-08
+    },
+    "mississippi_16h": {
+      "cost_gap": 0.05204726263571782,
+      "lmp_mae": 0.43637925386428833,
+      "power_balance_err": 1.1249291154041155e-07
+    },
+    "kansas_04h": {
+      "cost_gap": 0.13384267749245377,
+      "lmp_mae": 0.4506933093070984,
+      "power_balance_err": 0.0
+    },
+    "kansas_16h": {
+      "cost_gap": 0.07877639668791842,
+      "lmp_mae": 0.29812300205230713,
+      "power_balance_err": 5.987332719911138e-08
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v13.pt"
+}

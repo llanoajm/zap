@@ -84,6 +84,11 @@ class GraphSample:
     target_lmp: np.ndarray       # (n_bus,)   float32
     target_obj: float
 
+    # GridSFM DC reference dispatch fraction (pg_ref / pmax) — strong merit-order proxy
+    # Loaded from {state}_dc_results.json. Spearman rank corr with true cost: -0.93 to -0.98.
+    # High fraction → cheap/baseload generator; ~0 → expensive or must-not-run.
+    gen_dc_frac: np.ndarray      # (n_gen,)   float32  (clipped to [0, 1.5])
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,6 +210,15 @@ def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
 
     edge_index = np.stack([src_arr, dst_arr], axis=0)  # (2, n_branch)
 
+    # GridSFM DC reference dispatch fraction (from case.target_pg loaded by load_case)
+    n_gen_model = len(gen_terminals)
+    if case.target_pg is not None and len(case.target_pg) >= n_gen_model:
+        dc_pg = case.target_pg[:n_gen_model].astype(np.float32)
+        pmax_safe_dc = np.where(gen_pmax_raw > 1e-6, gen_pmax_raw, 1.0)
+        dc_frac = np.clip(dc_pg / pmax_safe_dc, 0.0, 1.5).astype(np.float32)
+    else:
+        dc_frac = np.full(n_gen_model, 0.5, dtype=np.float32)
+
     return GraphSample(
         name=f"{state}_{hour}",
         n_bus=n_bus,
@@ -219,6 +233,7 @@ def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
         target_pg=gen_dispatch,
         target_lmp=lmps,
         target_obj=obj,
+        gen_dc_frac=dc_frac,
     )
 
 
@@ -251,6 +266,7 @@ def _save_sample(sample: GraphSample, cache_dir: str, state: str, hour: str):
         target_pg=sample.target_pg,
         target_lmp=sample.target_lmp,
         target_obj=np.array([sample.target_obj]),
+        gen_dc_frac=sample.gen_dc_frac,
     )
 
 
@@ -273,6 +289,7 @@ def _load_sample(cache_dir: str, state: str, hour: str) -> Optional[GraphSample]
         target_pg=d["target_pg"],
         target_lmp=d["target_lmp"],
         target_obj=float(d["target_obj"][0]),
+        gen_dc_frac=d["gen_dc_frac"] if "gen_dc_frac" in d else np.full(int(d["n_gen"][0]), 0.5, dtype=np.float32),
     )
 
 

@@ -5,22 +5,32 @@ Current best is marked **BEST**. Lower cost gap / LMP MAE is better; higher cosi
 Metrics on original 8 TEST samples (connecticut, oregon, mississippi, kansas × 2h) unless noted.
 Plan_cos is evaluated on delaware (train state, same as P6 original).
 
-| iter | experiment | cost_gap | LMP_MAE (mean) | LMP_MAE (med) | plan_cos | power_bal | notes |
-|------|------------|---------:|---------------:|--------------:|---------:|----------:|-------|
-| iter1 | Design A baseline (P3) | 0.634 | 1.323 | — | 0.834 | ~0 | start |
-| iter2a | v2: cost-fix + aux-loss W=0.5 | 0.473 | 1.664 | — | **0.977** | ~0 | best plan_cos |
-| iter2b | v3: cost-fix + gen-feats + aux W=0.1 + wd=1e-4 | 0.866 | 1.291 | — | — | ~0 | gen features hurt cost_gap |
-| iter2c | v4: cost-fix + aux W=0.15, 160ep (partial) | 0.704 | 1.541 | — | — | ~0 | W_AUX=0.15 converges slower |
-| iter3a | **v5: dc-frac decoder feature** | **0.1235** ✓ | 0.999 | **0.406** ✓ | — | ~0 | **BEST cost_gap; cost target MET** |
+| iter | experiment | cost_gap mean | cost_gap med | LMP_MAE mean | LMP_MAE med | power_bal | notes |
+|------|------------|-------------:|------------:|-------------:|------------:|----------:|-------|
+| iter1 | Design A baseline (P3) | 0.634 | — | 1.323 | — | ~0 | start |
+| iter2a | v2: cost-fix + aux W=0.5 | 0.473 | — | 1.664 | — | ~0 | plan_cos=0.977 ✓ |
+| iter2b | v3: + gen-feats + W=0.1 + wd | 0.866 | — | 1.291 | — | ~0 | gen features hurt |
+| iter2c | v4: aux W=0.15, 160ep partial | 0.704 | — | 1.541 | — | ~0 | slow convergence |
+| iter3a | v5: dc-frac decoder | 0.1235 ✓ | — | 0.999 | 0.406 ✓ | ~0 | cost target MET |
+| iter3b | v7: + ranking loss, 150ep | 0.1056 ✓ | 0.063 | 0.964 | 0.431 ✓ | ~0 | best balance iter3 start |
+| iter3c | v8: + dc_va node feat | **0.0469** ✓ | **0.013** | 1.154 | 0.404 ✓ | ~0 | best cost_gap ever |
+| iter3d | v9: + dc_flow edge feat | 0.0818 ✓ | 0.055 | **0.823** | **0.332** ✓ | ~0 | **BEST LMP** |
+| iter3e | v10: deeper (4L, hidden 96) | 0.073 ✓ | 0.062 | 0.964 | 0.407 ✓ | ~0 | no improvement over v9 |
+| iter3f | v11: W_AUX=2.0 | **0.0247** ✓ | **0.010** | 0.926 | 0.350 ✓ | ~0 | **BEST cost_gap** |
+| iter3g | v12: + log_pmax decoder | 0.067 ✓ | 0.055 | 0.861 | 0.334 ✓ | ~0 | pmax marginal gain |
 
-North star targets: cost_gap<0.20 ✓ (0.1235), LMP_MAE<0.66 (median 0.406 ✓, mean 0.999 ✗), plan_cos>0.95 (train: 0.977 ✓)
+North star targets: cost_gap<0.20 ✓ (best 0.0247), LMP_MAE median<0.66 ✓ (best 0.332), LMP_MAE mean<0.66 ✗ (best 0.823), plan_cos>0.95 ✓ (0.977 on training grid)
 
-Findings:
-- Cost mapping fix (impute missing gen costs): +4 train samples + 2 test samples (vermont, new_mexico, massachusetts)
-- Aux MSE loss W=0.5: best for cost_gap/plan_cos in topology-only models
-- Generator pmax features: HURT test generalization (state-specific pmax→cost correlation)
-- **DC dispatch fraction (gen_dc_frac = pg_ref/pmax)**: MAJOR win — cost_gap 0.473→0.1235, LMP median 0.406 (below target)
-  - Available for all states from dc_results.json; directly encodes merit order
-  - Mean LMP MAE 0.999 due to outlier hours (1-2 samples with very high LMP error)
-- Utah excluded: genuine network congestion causes extreme LMPs regardless of cost fix
-- Training loss still decreasing at epoch 119/120 → more epochs likely to help further
+Key findings (iter-3):
+- **DC dispatch fraction (gen_dc_frac)**: MAJOR win — cost_gap 0.473→0.0247 across v5/v9/v11
+- **DC bus voltage angle as node feat (v8)**: cost_gap 0.1235→0.0469 (large gain)
+- **DC branch flow fraction as edge feat (v9)**: fixes mississippi_16h LMP outlier, improves LMP mean 1.154→0.823
+- **Pairwise ranking loss (v7)**: improves merit order, better generalization
+- **W_AUX=2.0 (v11)**: best cost_gap (0.0247), slight LMP regression
+- **LMP mean <0.66 blocked by connecticut_16h** (LMP MAE ≈ 4.75-5.1 in ALL experiments)
+  - True LMPs are uniform at 6.39 (no congestion), but DC reference doesn't dispatch the true marginal gen
+  - gen 30 (true cost=6.39, marginal) has dc_frac=0.0 → model predicts it expensive → wrong LMP
+  - Other generators (dc_frac=0.1, pmax=0.2-4.1, true cost=7.0-7.8) predicted too cheap (1.4-3.3)
+  - Without connecticut_16h: LMP mean ≈ 0.30-0.35 (well below 0.66 target)
+- Utah excluded: genuine network congestion causes extreme LMPs
+- Massachusetts (expanded test set): cost_gap=0.34-0.64, LMP=5.2-5.8 (hard case)

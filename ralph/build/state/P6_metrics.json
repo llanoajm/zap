@@ -1,0 +1,103 @@
+{
+  "phase": "P6",
+  "grid": {
+    "state": "delaware",
+    "n_bus": 33,
+    "n_gen": 9,
+    "n_periods": 2
+  },
+  "baseline_periods": [
+    {
+      "hour": "04h",
+      "obj": 6.636364585711024,
+      "lmp_mean": 0.981832916444731,
+      "lmp_max": 1.000065283994022,
+      "active_set": {
+        "n_gen": 9,
+        "at_max": 3,
+        "at_zero": 5,
+        "intermediate": 1,
+        "capacity_utilization": 0.7314247584193879
+      }
+    },
+    {
+      "hour": "16h",
+      "obj": 9.771323314423743,
+      "lmp_mean": 1.0725593001173797,
+      "lmp_max": 1.0936267585362347,
+      "active_set": {
+        "n_gen": 9,
+        "at_max": 5,
+        "at_zero": 2,
+        "intermediate": 2,
+        "capacity_utilization": 0.7094715140194578
+      }
+    }
+  ],
+  "planning_gradient_exact": {
+    "gradient_mean": -0.09396567193569183,
+    "gradient_min": -0.9704253730642876,
+    "gradient_max": 0.10763850524000418,
+    "top_invest_gens": [
+      6,
+      3,
+      2,
+      1,
+      8
+    ],
+    "lmp_gradient_correlation": -0.18218566050611915
+  },
+  "design_a_periods": [
+    {
+      "hour": "04h",
+      "p3_obj_with_pred_costs": 6.330162383518703,
+      "p3_cost_at_true_costs": 13.283228379629676,
+      "true_obj": 6.636364585711024,
+      "lmp_mae": 0.736969149326544,
+      "active_set_p3": {
+        "n_gen": 9,
+        "at_max": 7,
+        "at_zero": 2,
+        "intermediate": 0,
+        "capacity_utilization": 0.7314247703779196
+      },
+      "active_set_exact": {
+        "n_gen": 9,
+        "at_max": 3,
+        "at_zero": 5,
+        "intermediate": 1,
+        "capacity_utilization": 0.7314247584193879
+      }
+    },
+    {
+      "hour": "16h",
+      "p3_obj_with_pred_costs": 9.419112486431851,
+      "p3_cost_at_true_costs": 10.48683565819261,
+      "true_obj": 9.771323314423743,
+      "lmp_mae": 0.38042866604006614,
+      "active_set_p3": {
+        "n_gen": 9,
+        "at_max": 3,
+        "at_zero": 3,
+        "intermediate": 3,
+        "capacity_utilization": 0.7094714608014422
+      },
+      "active_set_exact": {
+        "n_gen": 9,
+        "at_max": 5,
+        "at_zero": 2,
+        "intermediate": 2,
+        "capacity_utilization": 0.7094715140194578
+      }
+    }
+  ],
+  "gradient_consistency": {
+    "cosine_similarity": 0.75914137225084,
+    "relative_error": 9.911671618575879,
+    "assessment": "Inconsistent"
+  },
+  "active_set_comparison": {
+    "exact_at_max_mean": 4.0,
+    "design_a_at_max_mean": 5.0
+  }
+}

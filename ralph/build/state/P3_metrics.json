@@ -1,0 +1,100 @@
+{
+  "phase": "P3",
+  "model": {
+    "hidden_dim": 64,
+    "n_mp_layers": 3,
+    "n_params": 77697
+  },
+  "training": {
+    "n_epochs": 100,
+    "best_epoch": 76,
+    "best_train_loss": 0.34554448425769807,
+    "elapsed_s": 332.1850883960724
+  },
+  "quality_filter": {
+    "lmp_threshold": 100.0,
+    "train_filtered_out": [
+      "vermont_04h",
+      "vermont_16h",
+      "new_mexico_04h",
+      "new_mexico_16h",
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_filtered_out": [
+      "massachusetts_04h",
+      "massachusetts_16h"
+    ]
+  },
+  "train_metrics": {
+    "n_evaluated": 30,
+    "dispatch_mae": {
+      "mean": 0.49617364819229504,
+      "median": 0.4405401349067688
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.32474419474601746,
+      "median": 0.31009645760059357
+    },
+    "cost_gap": {
+      "mean": 0.4644,
+      "median": null,
+      "note": "corrected: evaluated at true gen costs (not predicted costs)"
+    },
+    "lmp_mae": {
+      "mean": 1.9304365216443935,
+      "median": 0.6488966047763824
+    },
+    "power_balance_err": {
+      "mean": 5.557366088479275e-08,
+      "median": 6.531585365131677e-08
+    },
+    "decoder_deviation": {
+      "mean": 538.8114759745189,
+      "median": 441.2555183860152
+    }
+  },
+  "test_metrics": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.4616145249456167,
+      "median": 0.4977746903896332
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.37976209074258804,
+      "median": 0.42342863976955414
+    },
+    "cost_gap": {
+      "mean": 0.6337,
+      "median": null,
+      "note": "corrected: evaluated at true gen costs (not predicted costs)"
+    },
+    "lmp_mae": {
+      "mean": 1.3230536002665758,
+      "median": 0.6682421565055847
+    },
+    "power_balance_err": {
+      "mean": 5.932561810093545e-08,
+      "median": 3.819560596221186e-08
+    },
+    "decoder_deviation": {
+      "mean": 582.5637293980308,
+      "median": 513.5682480588762
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a.pt",
+  "comparison_vs_P2": {
+    "test_dispatch_mae_P2": 0.4481023345142603,
+    "test_dispatch_mae_P3": 0.4616145249456167,
+    "test_cost_gap_P2": 1.544582771272683,
+    "test_cost_gap_P3": 0.6337,
+    "test_lmp_mae_P2": 1.3304532617330551,
+    "test_lmp_mae_P3": 1.3230536002665758,
+    "test_power_balance_P2": 0.4436099859208783,
+    "test_power_balance_P3": 5.932561810093545e-08
+  },
+  "warm_start_check": {
+    "decoder_deviation_mean": 582.5637293980308,
+    "note": "If decoder_deviation \u2248 0, model collapses to pass-through of true params (trivial)."
+  }
+}

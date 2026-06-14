@@ -1,0 +1,94 @@
+{
+  "phase": "P4",
+  "jepa_pretraining": {
+    "n_epochs": 60,
+    "n_train_samples": 30,
+    "mask_frac": 0.25,
+    "ema_tau": 0.996,
+    "final_epoch_stats": {
+      "epoch": 60,
+      "pred_loss": 0.26265058169762295,
+      "var_loss": 0.2753587067127228,
+      "cov_loss": 0.3176896060506503,
+      "intra_corr": 0.05566514221330484
+    },
+    "sigreg_intra_corr": {
+      "epoch_1": 0.0228899869757394,
+      "epoch_final": 0.05566514221330484,
+      "mean": 0.050601967184597425,
+      "note": "Intra-graph embedding covariance off-diagonal mean. High values violate SIGReg i.i.d. assumption."
+    }
+  },
+  "finetuning": {
+    "n_epochs": 100,
+    "best_epoch": 10,
+    "best_loss": 0.3933731233080228
+  },
+  "test_metrics_jepa": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.5979322902858257,
+      "median": 0.5634284019470215
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.4025746677070856,
+      "median": 0.45482291281223297
+    },
+    "cost_gap": {
+      "mean": 0.8813795609051243,
+      "median": 0.3035642241407972
+    },
+    "lmp_mae": {
+      "mean": 1.1134696297522169,
+      "median": 0.10458153113722801
+    },
+    "power_balance_err": {
+      "mean": 3.315942008732187e-08,
+      "median": 0.0
+    },
+    "decoder_deviation": {
+      "mean": 537.3711848379144,
+      "median": 454.2967919075832
+    }
+  },
+  "test_metrics_p3_scratch": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.4616145249456167,
+      "median": 0.4977746903896332
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.37976209074258804,
+      "median": 0.42342863976955414
+    },
+    "cost_gap": {
+      "mean": 0.6337,
+      "median": null,
+      "note": "corrected: evaluated at true gen costs (not predicted costs)"
+    },
+    "lmp_mae": {
+      "mean": 1.3230536002665758,
+      "median": 0.6682421565055847
+    },
+    "power_balance_err": {
+      "mean": 5.932561810093545e-08,
+      "median": 3.819560596221186e-08
+    },
+    "decoder_deviation": {
+      "mean": 582.5637293980308,
+      "median": 513.5682480588762
+    }
+  },
+  "comparison_jepa_vs_scratch": {
+    "dispatch_mae_scratch": 0.4616145249456167,
+    "dispatch_mae_jepa": 0.5979322902858257,
+    "cost_gap_scratch": 0.6337,
+    "cost_gap_jepa": 0.8813795609051243,
+    "lmp_mae_scratch": 1.3230536002665758,
+    "lmp_mae_jepa": 1.1134696297522169
+  },
+  "checkpoints": {
+    "pretrained_encoder": "ralph/build/state/checkpoints/jepa_encoder.pt",
+    "finetuned_design_a": "ralph/build/state/checkpoints/design_a_jepa.pt"
+  }
+}

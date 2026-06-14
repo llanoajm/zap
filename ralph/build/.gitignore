@@ -3,3 +3,4 @@ state/checkpoints/
 logs/
 __pycache__/
 *.pyc
+state/cache/

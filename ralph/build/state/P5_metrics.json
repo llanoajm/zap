@@ -1,0 +1,150 @@
+{
+  "phase": "P5",
+  "n_test_samples": 8,
+  "n_repeats": 5,
+  "timing_ms": {
+    "cold_lp_clarabel": {
+      "mean": 102.74292200000446,
+      "median": 90.0785365001866,
+      "min": 63.312009000128455,
+      "max": 197.52724799991483
+    },
+    "p2_gnn_only": {
+      "mean": 3.3581568749809776,
+      "median": 3.4558324998670287
+    },
+    "p3_gnn_plus_lp": {
+      "mean": 106.82305862496833,
+      "median": 94.42679349990613
+    }
+  },
+  "speedup": {
+    "p2_vs_lp_mean": 30.344567722091398,
+    "p2_vs_lp_note": "GNN only, ~instant but low quality",
+    "p3_vs_lp_mean": 0.9742590349040624,
+    "p3_vs_lp_note": "GNN + LP with predicted costs vs cold LP; similar time",
+    "gridsfm_ref_speedup": 1.66
+  },
+  "quality": {
+    "p2_cost_gap_mean": 1.544577929190659,
+    "p3_cost_gap_mean": 0.6336919425214511
+  },
+  "per_sample": [
+    {
+      "name": "connecticut_04h",
+      "n_bus": 156,
+      "n_gen": 38,
+      "t_cold_clarabel_ms": 64.58122599997296,
+      "t_p2_gnn_only_ms": 1.8906249997598934,
+      "t_p3_gnn_only_ms": 1.8300550000276417,
+      "t_p3_gnn_plus_lp_ms": 57.58424700024989,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 4.149577838520584,
+      "p3_cost_gap": 2.019347169139564,
+      "speedup_p2_vs_lp": 34.158664996059336,
+      "speedup_p3_vs_lp": 1.1215085611815452
+    },
+    {
+      "name": "connecticut_16h",
+      "n_bus": 156,
+      "n_gen": 41,
+      "t_cold_clarabel_ms": 63.312009000128455,
+      "t_p2_gnn_only_ms": 2.4295329999404203,
+      "t_p3_gnn_only_ms": 2.4227230001088174,
+      "t_p3_gnn_plus_lp_ms": 64.41958799996428,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 3.1099874041201065,
+      "p3_cost_gap": 1.715519300648361,
+      "speedup_p2_vs_lp": 26.05933280251022,
+      "speedup_p3_vs_lp": 0.9828067978355212
+    },
+    {
+      "name": "oregon_04h",
+      "n_bus": 341,
+      "n_gen": 59,
+      "t_cold_clarabel_ms": 72.03014000015173,
+      "t_p2_gnn_only_ms": 3.2943030000751605,
+      "t_p3_gnn_only_ms": 3.1549090003863967,
+      "t_p3_gnn_plus_lp_ms": 71.6840449999836,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 0.9750708465551815,
+      "p3_cost_gap": 0.2892366007353006,
+      "speedup_p2_vs_lp": 21.865062199350923,
+      "speedup_p3_vs_lp": 1.0048280618116376
+    },
+    {
+      "name": "oregon_16h",
+      "n_bus": 341,
+      "n_gen": 61,
+      "t_cold_clarabel_ms": 64.67384099960327,
+      "t_p2_gnn_only_ms": 3.380666999873938,
+      "t_p3_gnn_only_ms": 3.2854810001481383,
+      "t_p3_gnn_plus_lp_ms": 71.07307300020693,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 0.7351202449961254,
+      "p3_cost_gap": 0.269067737750453,
+      "speedup_p2_vs_lp": 19.13049732553218,
+      "speedup_p3_vs_lp": 0.9099626380220673
+    },
+    {
+      "name": "mississippi_04h",
+      "n_bus": 528,
+      "n_gen": 38,
+      "t_cold_clarabel_ms": 113.84832900012043,
+      "t_p2_gnn_only_ms": 3.937736000352743,
+      "t_p3_gnn_only_ms": 3.8255009999375034,
+      "t_p3_gnn_plus_lp_ms": 117.16954199982865,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 1.2051385931984604,
+      "p3_cost_gap": 0.10342654270003783,
+      "speedup_p2_vs_lp": 28.91212843875818,
+      "speedup_p3_vs_lp": 0.9716546387139323
+    },
+    {
+      "name": "mississippi_16h",
+      "n_bus": 528,
+      "n_gen": 39,
+      "t_cold_clarabel_ms": 108.12693300022147,
+      "t_p2_gnn_only_ms": 4.346915000041918,
+      "t_p3_gnn_only_ms": 4.157885000040551,
+      "t_p3_gnn_plus_lp_ms": 122.01278900010948,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 0.3895180301806188,
+      "p3_cost_gap": 0.11729730328544705,
+      "speedup_p2_vs_lp": 24.87440702180254,
+      "speedup_p3_vs_lp": 0.8861934382970661
+    },
+    {
+      "name": "kansas_04h",
+      "n_bus": 653,
+      "n_gen": 40,
+      "t_cold_clarabel_ms": 137.8436499999225,
+      "t_p2_gnn_only_ms": 3.5309979998601193,
+      "t_p3_gnn_only_ms": 4.71091199960938,
+      "t_p3_gnn_plus_lp_ms": 142.1501739996529,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 1.013035373272978,
+      "p3_cost_gap": 0.28767625474005903,
+      "speedup_p2_vs_lp": 39.03815578637631,
+      "speedup_p3_vs_lp": 0.9697044057101124
+    },
+    {
+      "name": "kansas_16h",
+      "n_bus": 653,
+      "n_gen": 44,
+      "t_cold_clarabel_ms": 197.52724799991483,
+      "t_p2_gnn_only_ms": 4.054477999943629,
+      "t_p3_gnn_only_ms": 4.6273799998743925,
+      "t_p3_gnn_plus_lp_ms": 208.49101099975087,
+      "t_osqp_cold_ms": null,
+      "p2_cost_gap": 0.7791751026812161,
+      "p3_cost_gap": 0.26796463117238717,
+      "speedup_p2_vs_lp": 48.71829320634152,
+      "speedup_p3_vs_lp": 0.9474137376606172
+    }
+  ],
+  "osqp_warm_start": {
+    "available": false,
+    "note": "OSQP warm_starting tested; see t_osqp_cold_ms per sample."
+  }
+}

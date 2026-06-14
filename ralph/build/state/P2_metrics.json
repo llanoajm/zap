@@ -1,0 +1,76 @@
+{
+  "phase": "P2",
+  "model": {
+    "hidden_dim": 64,
+    "n_mp_layers": 3,
+    "n_params": 77826
+  },
+  "training": {
+    "n_epochs": 150,
+    "best_epoch": 70,
+    "best_train_loss": 0.35972923611601193,
+    "elapsed_s": 45.345446825027466
+  },
+  "quality_filter": {
+    "lmp_threshold": 100.0,
+    "train_filtered_out": [
+      "vermont_04h",
+      "vermont_16h",
+      "new_mexico_04h",
+      "new_mexico_16h",
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_filtered_out": [
+      "massachusetts_04h",
+      "massachusetts_16h"
+    ]
+  },
+  "train_metrics": {
+    "n_evaluated": 30,
+    "dispatch_mae": {
+      "mean": 0.4943467825651169,
+      "median": 0.3837781101465225
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.274107851088047,
+      "median": 0.2716785669326782
+    },
+    "cost_gap": {
+      "mean": 1.186279510134643,
+      "median": 1.0617613855827774
+    },
+    "lmp_mae": {
+      "mean": 1.4316384948790073,
+      "median": 0.7289064824581146
+    },
+    "power_balance_err": {
+      "mean": 0.44783216557226446,
+      "median": 0.39972297039376226
+    }
+  },
+  "test_metrics": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.4481023345142603,
+      "median": 0.4452044814825058
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.3428772855550051,
+      "median": 0.34711046516895294
+    },
+    "cost_gap": {
+      "mean": 1.544582771272683,
+      "median": 0.9940551804205588
+    },
+    "lmp_mae": {
+      "mean": 1.3304532617330551,
+      "median": 0.7437447905540466
+    },
+    "power_balance_err": {
+      "mean": 0.4436099859208783,
+      "median": 0.39065131759629296
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/baseline.pt"
+}

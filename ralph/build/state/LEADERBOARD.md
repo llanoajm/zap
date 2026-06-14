@@ -19,7 +19,20 @@ Plan_cos is evaluated on delaware (train state, same as P6 original).
 | iter3f | v11: W_AUX=2.0 | **0.0247** ✓ | **0.010** | 0.926 | 0.350 ✓ | ~0 | **BEST cost_gap** |
 | iter3g | v12: + log_pmax decoder | 0.067 ✓ | 0.055 | 0.861 | 0.334 ✓ | ~0 | pmax marginal gain |
 
-North star targets: cost_gap<0.20 ✓ (best 0.0247), LMP_MAE median<0.66 ✓ (best 0.332), LMP_MAE mean<0.66 ✗ (best 0.823), plan_cos>0.95 ✓ (0.977 on training grid)
+North star targets: cost_gap<0.20 ✓ (best 0.0247), LMP_MAE median<0.66 ✓ (best 0.332), LMP_MAE mean<0.66 ✗ (best 0.823), plan_cos>0.95 ✓ (v9=0.978, v11=0.980 on training grid)
+
+## Planning gradient — iter-3 models on delaware + cross-topology test
+
+| model | delaware cos | oregon_04h cos | kansas_04h cos | ref P6 |
+|---|---|---|---|---|
+| P3 baseline | 0.834 | — | — | iter-1 |
+| v2 cost-fix | 0.977 | — | — | iter-2 |
+| v9 best_lmp | **0.978** ✓ | 0.611 | 0.791 | iter-3 |
+| v11 best_costgap | **0.980** ✓ | 0.795 | 0.875 | iter-3 |
+
+Both v9 and v11 exceed the 0.95 target on delaware. v11 strictly better on all states.
+Cross-topology planning gradient (0.795, 0.875) approaching but not yet meeting 0.95 target.
+Source: state/improve_planning_v11_metrics.json
 
 Key findings (iter-3):
 - **DC dispatch fraction (gen_dc_frac)**: MAJOR win — cost_gap 0.473→0.0247 across v5/v9/v11

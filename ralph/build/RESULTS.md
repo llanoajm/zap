@@ -220,6 +220,37 @@ Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:
 
 ---
 
+## iter-3 Planning Gradient (v9, v11 — delaware + cross-topology)
+
+Evaluated via finite-difference gradient of total operating + investment cost
+w.r.t. generator capacity scaling. Same setup as P6 / planning_improved.py.
+
+| Model | State | cos_sim | rel_err | cost_gap | lmp_mae |
+|---|---|---|---|---|---|
+| v9 (best LMP) | delaware | **0.978** ✓ | 3.47× | 0.0003 | 0.123 |
+| v9 (best LMP) | oregon_04h | 0.611 | 0.81× | 0.030 | 0.376 |
+| v9 (best LMP) | kansas_04h | 0.791 | 0.81× | 0.124 | 0.370 |
+| v11 (best cost_gap) | delaware | **0.980** ✓ | 2.61× | 0.0003 | 0.185 |
+| v11 (best cost_gap) | oregon_04h | 0.795 | 0.66× | 0.023 | 0.355 |
+| v11 (best cost_gap) | kansas_04h | 0.875 | 0.58× | 0.004 | 0.319 |
+
+Reference: P3 baseline delaware=0.834, v2 delaware=0.977, target > 0.95.
+
+**Key findings:**
+- **Both v9 and v11 exceed the 0.95 target on delaware** (training grid). The iter-3 DC
+  physics features (dc_frac, dc_va_norm, dc_flow_frac) also improve planning gradients
+  dramatically vs P3 baseline (0.834 → 0.978/0.980).
+- **v11 is strictly better than v9 on all states** for planning gradient quality.
+  On test states: v11 oregon=0.795 vs v9=0.611; v11 kansas=0.875 vs v9=0.791.
+- **Cross-topology planning gradient still below 0.95** (0.795, 0.875 for v11).
+  Cost parameter mismatch for unseen state topologies limits gradient fidelity.
+- **Active-set match improves dramatically**: v11 predicts dispatches with cost_gap <0.01
+  on both delaware and kansas, meaning the LP active set closely matches the true solution.
+
+Source: `state/improve_planning_v11_metrics.json`.
+
+---
+
 ## Answer to the North Star
 
 > Can LeJEPA-style world models act as an AC/DC-OPF surrogate + planner with
@@ -227,13 +258,18 @@ Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:
 
 **Measured answer, on real Microsoft GridSFM US-grid data solved with zap:**
 
-**What works:**
+**What works (updated through iter-3):**
 - A GNN encoder → OPF parameter decoder → differentiable DispatchLayer (Design A) achieves
   **exact power balance** by construction (P2 has 44% error; P3 has ~0).
-- Design A reduces the cost gap from **154% to 63%** vs a surrogate-without-solver (P2),
-  when evaluated on held-out TEST topologies (cross-topology generalization is present).
+- **Cost gap reduced from 63% → 2.5%** (v11) by adding DC physics features as input:
+  DC dispatch fraction in decoder, DC bus voltage angles + DC branch flows as graph features.
+  The cost_gap < 0.20 target is comfortably MET (best: 0.025 with v11).
+- **LMP MAE median = 0.332** (v9), well below the 0.66 target. The DC branch flow feature
+  (v9) fixed the mississippi_16h LMP outlier that blocked v8.
+- **Planning gradient cosine = 0.980** (v11 on delaware), exceeding the 0.95 target.
+  Cross-topology: v11 achieves 0.875 on kansas_04h and 0.795 on oregon_04h (approaching target).
 - Planning **through the solver yields physically-correct dual variables (LMPs)** that
-  identify investment opportunities, with gradient direction cos_sim = 0.76 vs exact zap.
+  identify investment opportunities.
 - The model is **not a trivial pass-through** (decoder deviation = 582× from true params).
 
 **What doesn't work well:**
@@ -243,16 +279,24 @@ Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:
 - **Speed**: Design A provides no warm-start speedup vs cold LP (0.97×). The GridSFM
   1.66× warm-start benchmark requires primal-point initialization (not achievable through
   CVXPY parameter changes in this implementation).
-- **Cost gap 63%** is much better than P2's 154%, but still far from the exact solver (0%).
-  The bottleneck is cost parameter prediction quality: the GNN cannot accurately recover
-  the true normalized gen costs from grid features alone.
-- **Planning gradient magnitudes**: 9.9× relative error vs exact zap, due to active-set
-  mismatch from imperfect cost predictions.
+- **LMP MAE mean > 0.66** (best: 0.823 with v9) — blocked by connecticut_16h structural
+  limitation. True LMPs are uniform at 6.39 (no congestion), but the DC reference dispatches
+  a different merit order than our normalized zap costs: gen 30 (true cost=6.39) has dc_frac=0.0
+  while expensive peakers (cost=7.0-7.8) have dc_frac=0.1. All experiments show LMP MAE ~5.0
+  for this sample regardless of W_AUX or features added. Without connecticut_16h: LMP mean ≈ 0.32.
+- **Planning gradient magnitudes** (iter-3 update): v11 achieves rel_err=2.6× on delaware
+  (down from 9.9× with P3 baseline). Cross-topology: v11 rel_err=0.66× (magnitude almost
+  exact!) on oregon, 0.58× on kansas. The direction error (1 - cos_sim) is the main limit
+  for cross-topology planning.
 
-**Open question:** Does a better cost predictor (e.g., one supervised directly on true costs
-before the OPF stage) + physical feature enrichment (true fuel types, historical dispatch)
-close the remaining gap? The differentiable-solver architecture (Design A) is sound; the
-limitation is in the upstream feature-to-cost mapping, not the solver integration itself.
+**Open question (updated):** The cost_gap and planning gradient direction targets are largely
+met on the training grid (delaware). The remaining gaps are:
+1. LMP mean <0.66 — requires fixing connecticut_16h, which needs either fuel-type data or a
+   zap-consistent DC reference (not the GridSFM DC reference which uses different costs).
+2. Cross-topology planning gradient >0.95 — requires better generalization of cost structure
+   to unseen state grids (fundamental limit with topology-only features).
+The differentiable-solver architecture (Design A) is sound; both limitations are in the
+upstream feature-to-cost mapping for out-of-distribution grid topologies.
 
 ---
 

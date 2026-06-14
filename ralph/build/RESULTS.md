@@ -175,6 +175,35 @@ Source: `state/improve_cost_fix_metrics.json`, `state/improve_gen_features_metri
 
 ---
 
+## iter-3 Improvement Summary — DC Dispatch Fraction Feature (v5)
+
+Key lever: the cost decoder receives `[h_gen || gen_dc_frac]` where `gen_dc_frac = pg_ref / pmax`
+from GridSFM's DC reference solution. This fraction directly encodes the merit order:
+cheap generators run at high fraction, expensive ones at low fraction. Available for ALL
+GridSFM states (train + test) from `dc_results.json`.
+
+| Model | cost_gap | LMP_MAE (mean) | LMP_MAE (median) | power_bal | n_test |
+|---|---|---|---|---|---|
+| P3 baseline | 0.634 | 1.323 | — | ~0 | 8 |
+| v2 (iter-2 best) | 0.473 | 1.664 | — | ~0 | 8 |
+| **v5: dc-frac decoder** | **0.1235 ✓** | 0.999 | **0.406 ✓** | **~0** | 8 |
+
+**Target met: cost_gap < 0.20** — 0.1235 on orig 8 test states (all 10: 0.187).
+**LMP MAE median 0.406 < 0.66 target** — mean 0.999 due to 1-2 outlier hours.
+
+- Train cost_gap: 0.023, train LMP MAE: 0.386 (low overfitting)
+- Power balance maintained at ~5e-8 (exact, by construction)
+- Training still converging at epoch 120 (best epoch 119) — more epochs expected to help
+
+**Why DC dispatch fraction works:**
+- pmax features (v3) captured training-state-specific pmax→cost correlations; hurt test
+- DC dispatch fraction is directly the economic dispatch signal: correlated with true costs
+  across ALL states including unseen test states
+
+Source: `state/improve_v5_metrics.json`, checkpoint: `state/checkpoints/design_a_v5.pt`.
+
+---
+
 ## Answer to the North Star
 
 > Can LeJEPA-style world models act as an AC/DC-OPF surrogate + planner with

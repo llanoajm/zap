@@ -1,0 +1,103 @@
+{
+  "experiment": "improve_v5_dc_frac",
+  "changes": [
+    "decoder input: h_gen + gen_dc_frac (GridSFM DC reference dispatch fraction)",
+    "DC dispatch fraction has Spearman rank corr ~-0.95 with true gen costs",
+    "W_AUX=0.5 (same as best v2), 120 epochs"
+  ],
+  "training": {
+    "n_epochs": 120,
+    "best_epoch": 119,
+    "best_loss": 2.2002516426026193
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.18760430924849328,
+      "median": 0.08524124696850777
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.12870324086667123,
+      "median": 0.08483659476041794
+    },
+    "cost_gap": {
+      "mean": 0.02306153233621118,
+      "median": 0.004969116320423104
+    },
+    "lmp_mae": {
+      "mean": 0.38596982951276004,
+      "median": 0.21630799025297165
+    },
+    "power_balance_err": {
+      "mean": 5.849984847197296e-08,
+      "median": 6.858467816990319e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.3681177657355749,
+      "median": 0.30783869490986576
+    }
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.24366649128496648,
+      "median": 0.1331094279885292
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.1841346189379692,
+      "median": 0.1560107246041298
+    },
+    "cost_gap": {
+      "mean": 0.1869981447971631,
+      "median": 0.1239289855620869
+    },
+    "lmp_mae": {
+      "mean": 1.906958493590355,
+      "median": 0.4540580213069916
+    },
+    "power_balance_err": {
+      "mean": 4.634475554865455e-08,
+      "median": 3.3918973812652756e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5588121994801531,
+      "median": 0.5469328842116012
+    }
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.272290822584182,
+      "median": 0.22008778154850006
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.1912616640329361,
+      "median": 0.16033213585615158
+    },
+    "cost_gap": {
+      "mean": 0.12346937103723164,
+      "median": 0.08445660321186294
+    },
+    "lmp_mae": {
+      "mean": 0.9993111006915569,
+      "median": 0.40615738928318024
+    },
+    "power_balance_err": {
+      "mean": 4.9451200982655e-08,
+      "median": 3.819560596221186e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.555707186605157,
+      "median": 0.5173640326409876
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v5.pt"
+}

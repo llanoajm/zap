@@ -13,9 +13,10 @@ Node features  (n_bus × 5):
   3  is_ref         — 1 if reference/slack bus
   4  dc_va_norm     — DC bus voltage angle / max(|angle|) — encodes congestion
 
-Edge features  (n_branch × 2):
+Edge features  (n_branch × 3):
   0  susc_norm      — susceptance / median susceptance
   1  cap_norm       — thermal capacity / total load     (same scale as load)
+  2  dc_flow_frac   — |B*(θi-θj)| / rate_a — DC branch flow fraction (congestion signal)
 
 Edge index     (2 × n_branch) long  — [src, dst]
 
@@ -73,7 +74,7 @@ class GraphSample:
     # Graph structure
     node_feats: np.ndarray       # (n_bus, 4)  float32
     edge_index: np.ndarray       # (2, n_branch) int32
-    edge_feats: np.ndarray       # (n_branch, 2)  float32
+    edge_feats: np.ndarray       # (n_branch, 3)  float32
 
     # Generator auxiliary
     gen_bus: np.ndarray          # (n_gen,)  int32
@@ -241,7 +242,16 @@ def build_sample(state: str, hour: str, data_dir: str) -> Optional[GraphSample]:
     med_susc = float(np.median(susc_arr)) if susc_arr.size else 1.0
     susc_norm = susc_arr / max(med_susc, 1e-6)
     cap_norm = cap_arr / max(float(total_load), 1e-6)
-    edge_feats = np.stack([susc_norm, cap_norm], axis=1)  # (n_branch, 2)
+    # DC branch flow utilization: |B*(θi - θj)| / rate_a (clamped to [0, 1.5])
+    if case.target_va is not None and len(src_arr) > 0:
+        va_full = np.asarray(case.target_va).ravel().astype(np.float32)
+        angle_diff = va_full[src_arr] - va_full[dst_arr]
+        dc_flow = np.abs(susc_arr * angle_diff)
+        cap_safe = np.where(cap_arr > 1e-6, cap_arr, 1.0)
+        dc_flow_frac = np.clip(dc_flow / cap_safe, 0.0, 1.5).astype(np.float32)
+    else:
+        dc_flow_frac = np.zeros(len(src_arr), dtype=np.float32)
+    edge_feats = np.stack([susc_norm, cap_norm, dc_flow_frac], axis=1)  # (n_branch, 3)
 
     edge_index = np.stack([src_arr, dst_arr], axis=0)  # (2, n_branch)
 

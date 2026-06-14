@@ -1,0 +1,185 @@
+{
+  "experiment": "improve_v8_dc_va_node_feat",
+  "changes": [
+    "DC bus voltage angle as 5th node feature (node_in=4\u21925)",
+    "pairwise ranking loss W_RANK=0.2 (from v7)",
+    "dc_frac decoder feature (from v5)",
+    "150 epochs from scratch, W_AUX=0.5"
+  ],
+  "training": {
+    "n_epochs": 150,
+    "best_epoch": 150,
+    "best_loss": 0.6640514277015053
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.12369672310144107,
+      "median": 0.078338123857975
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.10742053480986576,
+      "median": 0.0672917552292347
+    },
+    "cost_gap": {
+      "mean": 0.017067242514678903,
+      "median": 0.0018853042080255416
+    },
+    "lmp_mae": {
+      "mean": 0.3648387449511039,
+      "median": 0.14160260558128357
+    },
+    "power_balance_err": {
+      "mean": 4.3295609141393976e-08,
+      "median": 0.0
+    },
+    "decoder_deviation": {
+      "mean": 0.3386250902563405,
+      "median": 0.2724448929505568
+    },
+    "per_sample": [
+      [
+        "montana_16h",
+        2.735894203186035,
+        0.0032515153655958075
+      ],
+      [
+        "montana_04h",
+        2.570592164993286,
+        0.004952710724056252
+      ],
+      [
+        "alabama_16h",
+        0.8710538148880005,
+        0.029568473171591877
+      ],
+      [
+        "vermont_04h",
+        0.8040379285812378,
+        4.857661365014933e-05
+      ],
+      [
+        "maine_16h",
+        0.692181408405304,
+        0.05096781261772726
+      ]
+    ]
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.19455873107799562,
+      "median": 0.09888095036149025
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.15622556619346142,
+      "median": 0.13235294818878174
+    },
+    "cost_gap": {
+      "mean": 0.16033672473269528,
+      "median": 0.01985028468556569
+    },
+    "lmp_mae": {
+      "mean": 1.985733086615801,
+      "median": 0.4475725442171097
+    },
+    "power_balance_err": {
+      "mean": 7.598439425132488e-08,
+      "median": 7.211457977486462e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5865498684603578,
+      "median": 0.5650281412936287
+    },
+    "per_sample": [
+      [
+        "massachusetts_04h",
+        5.473046779632568,
+        0.372531224219425
+      ],
+      [
+        "massachusetts_16h",
+        5.154289245605469,
+        0.8555908325515434
+      ],
+      [
+        "connecticut_16h",
+        5.034367561340332,
+        0.09988573605422262
+      ],
+      [
+        "mississippi_16h",
+        2.2196764945983887,
+        0.2205042813200885
+      ],
+      [
+        "oregon_16h",
+        0.4802699685096741,
+        0.001123964678411948
+      ]
+    ]
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.20114607781033556,
+      "median": 0.07864267006516457
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.16236484562978148,
+      "median": 0.17547228932380676
+    },
+    "cost_gap": {
+      "mean": 0.04690564881949804,
+      "median": 0.012516836059236178
+    },
+    "lmp_mae": {
+      "mean": 1.1537493551149964,
+      "median": 0.4038242697715759
+    },
+    "power_balance_err": {
+      "mean": 8.650074936099291e-08,
+      "median": 8.337348618535082e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.5495376610384772,
+      "median": 0.5650281412936287
+    },
+    "per_sample": [
+      [
+        "connecticut_16h",
+        5.034367561340332,
+        0.09988573605422262
+      ],
+      [
+        "mississippi_16h",
+        2.2196764945983887,
+        0.2205042813200885
+      ],
+      [
+        "oregon_16h",
+        0.4802699685096741,
+        0.001123964678411948
+      ],
+      [
+        "oregon_04h",
+        0.4148751199245453,
+        0.00010932514090394921
+      ],
+      [
+        "kansas_16h",
+        0.39277341961860657,
+        0.0169160692133865
+      ]
+    ]
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v8.pt"
+}

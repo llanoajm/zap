@@ -1,0 +1,10 @@
+{
+  "phase": "P0_pipeline",
+  "status": "done",
+  "converter": "src/gridsfm_zap.py",
+  "cases_solved": 45,
+  "cases_total": 46,
+  "diff_layer_check": {"grid": "delaware", "rel_error_vs_finite_diff": 0.0083, "result": "PASS"},
+  "data": {"train_states": 18, "test_states": 5, "hours": ["04h", "16h"]},
+  "notes": "zap solves real GridSFM US-state grids and yields exact LMPs; through-solver gradient verified."
+}

@@ -8,14 +8,20 @@ All numbers produced by code in `ralph/build/src/` and backed by `state/*_metric
 
 ---
 
-## Dataset (P1)
+## Dataset (P1 / iter-2 update)
 
 - 46 samples total: 36 train (18 states × 2 hours) + 10 test (5 states × 2 hours).
 - Bus count range: 11–653; median 222. Branch count: 17–1071. Generator count: 4–240.
-- Quality filter: 6 train + 2 test samples excluded (max |LMP| > 100) due to failed cost
-  normalization in `gridsfm_zap.py` (vermont_04h inaccurate solve, new_mexico, utah, massachusetts).
-- Remaining good samples: 30 train, 8 test.
-- Source: `state/P1_metrics.json`.
+- **iter-1 quality filter**: 6 train + 2 test excluded due to extreme LMPs from bad cost
+  normalization (vermont, new_mexico, utah from train; massachusetts from test).
+- **iter-2 fix**: `gridsfm_zap.py` now imputes missing generator costs (generators with no
+  `cost` field in the MATPOWER model) from the per-case median of generators that DO have
+  real cost data. Previously, the default value of 1.0 dominated the median when >50% of
+  generators lacked cost data, causing the normalization to fail and LMPs to explode.
+  After fix: vermont (×2 train), new_mexico (×2 train), massachusetts (×2 test) now pass
+  the quality filter. Utah (×2 train) still fails due to genuine network congestion.
+- **Remaining good samples after iter-2 fix**: 34 train, 10 test.
+- Source: `state/P1_metrics.json`, `state/improve_cost_fix_metrics.json`.
 
 ---
 
@@ -107,26 +113,65 @@ Demonstrated on delaware (33 buses, 9 generators, 2 periods: 04h peak and 16h pe
 - Most negative investment gradient: gen 6 (grad = −0.97), bus 27.
 - Correlation between bus LMP and investment gradient: −0.18 (weak, direction consistent).
 
-**Design A planning gradient vs exact zap:**
-- Cosine similarity: 0.76 (captures rough direction)
-- Relative error in magnitude: 9.9× (large)
+**Planning gradient: Design A baseline (P3) vs v2 (cost-mapping fix + aux loss):**
 
-The gradient direction is broadly consistent (gen 6 has most negative gradient in both).
-The magnitude error stems from active-set mismatch in period 04h: Design A places 7
-generators at pmax (vs 3 in exact solution), changing the dual structure. With wrong
-cost parameters, different generators bind, giving wrong dual signal magnitudes.
+| Model | Cosine sim (Delaware) | Relative error | Magnitude ratio |
+|---|---|---|---|
+| P3 baseline | 0.834 | 11.2× | 12.0× |
+| **v2 (iter-2 fix)** | **0.977** | **2.5×** | **3.4×** |
+| Target | > 0.95 | — | — |
 
-**Active-set comparison:**
-- Exact solver: mean 4 generators at pmax across periods.
-- Design A: mean 5 generators at pmax (1 too many).
+v2's improved cost predictions dramatically improve planning gradient quality on delaware
+(the training state). The cosine similarity of **0.977 exceeds the 0.95 target** on this case.
 
-**Conclusion for P6:** The differentiable stack does produce planning gradients through the
-solver. LMPs correctly signal investment opportunities. However, Design A's imperfect cost
-prediction alters the active set, leading to gradient directions that are roughly (but not
-reliably) consistent with exact zap, and magnitude errors of ~10×. For reliable planning,
-more accurate cost parameter prediction is needed.
+**Cross-topology planning gradient (test states, 1 period each):**
+- oregon_04h: P3=0.297, v2=0.565 (v2 better)
+- kansas_04h: P3=0.837, v2=0.097 (v2 much worse!)
 
-Source: `state/P6_metrics.json`.
+Both models have near-zero Spearman rank correlation for Kansas generator costs (P3=0.022,
+v2=-0.001), meaning neither can predict the merit order for Kansas from topology alone.
+The planning gradient quality for test states is highly variable and model-dependent.
+
+**Conclusion for P6 (updated iter-2):** With the cost-mapping fix, planning gradients on
+the training grid (delaware) exceed the cosine similarity target (0.977). Cross-topology
+planning gradient quality is still inconsistent: v2 is better on some test states and
+worse on others. The fundamental limitation is that generator cost cannot be reliably
+predicted from bus topology alone for unseen US state grids.
+
+Source: `state/P6_metrics.json`, `state/improve_planning_metrics.json`.
+
+---
+
+---
+
+## iter-2 Improvement Summary
+
+All experiments use the cost-mapping fix in `gridsfm_zap.py` (impute missing gen costs).
+Evaluated on held-out TEST states (original 8: connecticut, oregon, mississippi, kansas ×2h).
+
+| Model | cost_gap | LMP_MAE | plan_cos (Delaware) | power_bal | n_test |
+|---|---|---|---|---|---|
+| P3 baseline | 0.634 | 1.323 | 0.834 | ~0 | 8 |
+| v2: cost-fix + aux W=0.5 | **0.473** | 1.664 | **0.977** | ~0 | 8 |
+| v3: + gen-features + aux W=0.1 + wd | 0.866 | **1.291** | — | ~0 | 8 |
+| v4: aux W=0.15 (partial 160ep) | 0.704 | 1.541 | — | ~0 | 8 |
+
+**Best overall: v2** (state/checkpoints/design_a_v2.pt)
+- Cost gap: 0.634 → **0.473** (16pp improvement, target <0.20)
+- Planning gradient cosine (Delaware): 0.834 → **0.977** (exceeds 0.95 target on training grid)
+- Samples recovered: 30→34 train, 8→10 test (vermont, new_mexico train; massachusetts test)
+- LMP MAE: 1.323 → 1.664 (worse; aux cost loss changes marginal generator identification)
+
+**What worked:**
+- Cost-mapping fix: imputing missing gen costs from per-case median eliminated extreme LMPs for vermont, new_mexico, massachusetts (utah congestion remains)
+- Aux supervised cost loss (W=0.5): directly training the decoder on true gen costs improves cost gap and planning gradient quality on training grids
+
+**What didn't work:**
+- Generator pmax features in decoder: hurt test generalization (pmax→cost correlation is state-specific and doesn't transfer across US regions)
+- Reduced aux weight (0.1-0.15): weaker cost supervision leads to slower convergence and worse cost gap
+- Cross-topology planning gradient: highly variable; v2 helps oregon but hurts kansas (both models have ~0 Spearman rank correlation for Kansas gen costs → fundamental limit)
+
+Source: `state/improve_cost_fix_metrics.json`, `state/improve_gen_features_metrics.json`, `state/improve_planning_metrics.json`.
 
 ---
 

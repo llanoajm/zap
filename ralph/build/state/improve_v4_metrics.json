@@ -1,0 +1,27 @@
+{
+  "experiment": "improve_v4",
+  "status": "partial_run_160_of_200_epochs",
+  "changes": [
+    "aux cost loss weight: 0.15 (between v2=0.5 and v3=0.1)",
+    "200 epochs target (ran 160/200 before timeout)",
+    "no gen features"
+  ],
+  "training": {
+    "n_epochs_target": 200,
+    "n_epochs_run": 160,
+    "best_train_loss_at_160ep": 0.6311,
+    "note": "Loss still decreasing at 160ep — not converged"
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered_out": ["utah_04h", "utah_16h"],
+    "test_n_good": 10
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "cost_gap": {"mean": 0.7035},
+    "lmp_mae": {"mean": 1.5414}
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v4.pt",
+  "conclusion": "W_AUX=0.15 converges slowly and does not improve over v2 (W_AUX=0.5) within 160 epochs. Best aux weight appears to be 0.5 (v2)."
+}

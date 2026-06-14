@@ -205,13 +205,19 @@ evaluated on original 8 held-out TEST states.
 4. Pairwise ranking loss W=0.2 (v7): explicit merit order enforcement → 0.1% better cost_gap
 5. W_AUX=2.0 (v11): forces individual cost predictions closer to true → best cost_gap (0.025)
 
-**LMP mean blockage — connecticut_16h structural limitation:**
+**LMP mean blockage — connecticut_16h structural limitation (root cause verified):**
 - True LMPs: uniform 6.39 $/p.u. (no congestion), LMP = cost of single marginal generator
-- Marginal generator (gen 30): true cost=6.39, dc_frac=0.0 (DC reference doesn't dispatch it)
-- Model sees dc_frac=0.0 → predicts gen 30 too expensive (predicted cost ≈ 5.1-9.1 vs true 6.39)
-- Other generators with dc_frac=0.1 (pmax=0.2-4.1, true cost=7.0-7.8) predicted too cheap (1.4-3.3)
-- LP dispatches cheap-predicted generators, predicted LMP ≈ 1.4 vs true 6.39 → LMP MAE ≈ 5.0
-- Consistent across ALL v5-v12 experiments (4.75-5.12 LMP MAE for this one sample)
+- Marginal generator (gen 30): true cost=6.39, GridSFM dc_frac=0.0, pmax=4.6
+- Peakers: true cost=7.0-7.8, GridSFM dc_frac=0.1, pmax=0.2-4.1
+- Root cause: GridSFM DC reference uses MATPOWER linear costs (different normalization than zap).
+  In MATPOWER normalization, gen 30 is EXPENSIVE (not dispatched); peakers are CHEAP (dispatched
+  at 10%). In our zap normalization (divide by median cost), gen 30 is cheapest (6.39 < peakers 7.0+).
+- Verified: running zap with TRUE normalized costs gives dc_frac=0.112 for gen 30, 0.0 for peakers
+  (Spearman -0.639 with cost). GridSFM gives the OPPOSITE ordering.
+- Model sees GridSFM dc_frac=0.0 for gen 30 → predicts expensive → dispatches peakers → wrong LMP
+- No feature derived from GridSFM DC reference can fix this; the problem is a cost normalization
+  mismatch that requires either fuel type data or a zap-consistent DC reference
+- Consistent across ALL v5-v14 experiments (4.75-5.12 LMP MAE for this one sample)
 - WITHOUT connecticut_16h: LMP mean ≈ 0.30-0.35 (well below 0.66 target)
 
 Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:

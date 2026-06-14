@@ -1,0 +1,5 @@
+data/raw/
+state/checkpoints/
+logs/
+__pycache__/
+*.pyc

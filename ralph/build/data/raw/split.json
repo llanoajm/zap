@@ -1,0 +1,34 @@
+{
+  "train": [
+    "rhode_island",
+    "delaware",
+    "vermont",
+    "maine",
+    "new_hampshire",
+    "new_mexico",
+    "west_virginia",
+    "wyoming",
+    "idaho",
+    "maryland",
+    "utah",
+    "south_dakota",
+    "north_dakota",
+    "new_jersey",
+    "nevada",
+    "montana",
+    "nebraska",
+    "alabama"
+  ],
+  "test": [
+    "connecticut",
+    "massachusetts",
+    "oregon",
+    "mississippi",
+    "kansas"
+  ],
+  "hours": [
+    "04h",
+    "16h"
+  ],
+  "outdir": "ralph/build/data/raw"
+}

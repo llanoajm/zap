@@ -1,0 +1,97 @@
+{
+  "experiment": "improve_cost_fix",
+  "changes": [
+    "gridsfm_zap.py: impute missing gen costs from per-case median of real costs",
+    "train: add auxiliary supervised loss on gen costs (W_AUX=0.5)",
+    "train: 120 epochs (vs 100 baseline)"
+  ],
+  "model": {
+    "hidden_dim": 64,
+    "n_mp_layers": 3,
+    "n_params": 77697
+  },
+  "training": {
+    "n_epochs": 120,
+    "best_epoch": 120,
+    "best_train_loss": 3.8846567234791376,
+    "elapsed_s": 431.2403345108032,
+    "w_dispatch": 1.0,
+    "w_cost": 0.1,
+    "w_aux_cost": 0.5
+  },
+  "quality_filter": {
+    "lmp_threshold": 100.0,
+    "train_n_good": 34,
+    "train_filtered_out": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10,
+    "test_filtered_out": []
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.28313462930411065,
+      "median": 0.1842079535126686
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.17927487615972548,
+      "median": 0.1710669994354248
+    },
+    "cost_gap": {
+      "mean": 0.0738075138984325,
+      "median": 0.03376619264718288
+    },
+    "lmp_mae": {
+      "mean": 0.8570461845254826,
+      "median": 0.3214319795370102
+    },
+    "power_balance_err": {
+      "mean": 4.565530923447772e-08,
+      "median": 0.0
+    },
+    "decoder_deviation": {
+      "mean": 0.9294894325284273,
+      "median": 0.5798699325015966
+    }
+  },
+  "test_metrics": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.4274572402238846,
+      "median": 0.3269287049770355
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.3616813592612743,
+      "median": 0.3526773452758789
+    },
+    "cost_gap": {
+      "mean": 0.5249845077509332,
+      "median": 0.3898774252084269
+    },
+    "lmp_mae": {
+      "mean": 2.0415566712617874,
+      "median": 1.7179391384124756
+    },
+    "power_balance_err": {
+      "mean": 6.259629933212955e-08,
+      "median": 7.47363685115255e-08
+    },
+    "decoder_deviation": {
+      "mean": 1.326456797960438,
+      "median": 1.3303593205023343
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v2.pt",
+  "comparison_vs_P3": {
+    "test_dispatch_mae_P3": 0.4616145249456167,
+    "test_dispatch_mae_v2": 0.4274572402238846,
+    "test_cost_gap_P3": 0.6337,
+    "test_cost_gap_v2": 0.5249845077509332,
+    "test_lmp_mae_P3": 1.3230536002665758,
+    "test_lmp_mae_v2": 2.0415566712617874,
+    "test_n_samples_P3": 8,
+    "test_n_samples_v2": 10
+  }
+}

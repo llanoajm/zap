@@ -71,7 +71,7 @@ def load_case(model_path: str, dc_results_path: str | None = None) -> ConvertedC
 
     # ---- Generators -------------------------------------------------------
     gens = model.get("gen", {})
-    gen_terminals, gen_pmax, gen_pmin, gen_lin_cost = [], [], [], []
+    gen_terminals, gen_pmax, gen_pmin, gen_lin_cost, gen_has_cost = [], [], [], [], []
     gen_keys = [k for k in gens if int(gens[k].get("gen_status", 1)) == 1]
     for k in gen_keys:
         g = gens[k]
@@ -82,16 +82,29 @@ def load_case(model_path: str, dc_results_path: str | None = None) -> ConvertedC
         gen_pmax.append(_f(g.get("pmax"), 0.0))
         gen_pmin.append(_f(g.get("pmin"), 0.0))
         # MATPOWER gencost model 2 polynomial: cost = [c_{n-1}, ..., c1, c0].
-        # Linear coefficient is the second-to-last entry; convert $/p.u. roughly.
-        cost = g.get("cost", [0.0, 0.0, 0.0])
-        lin = cost[-2] if isinstance(cost, list) and len(cost) >= 2 else 1.0
-        gen_lin_cost.append(_f(lin, 1.0))
+        # Linear coefficient is the second-to-last entry ($/MWh; Pg already in p.u.).
+        cost = g.get("cost", [])
+        has_cost = isinstance(cost, list) and len(cost) >= 2
+        lin = _f(cost[-2], 0.0) if has_cost else 0.0
+        gen_lin_cost.append(lin)
+        gen_has_cost.append(has_cost)
     gen_terminals = np.array(gen_terminals, dtype=int)
     gen_pmax = np.array(gen_pmax)
     gen_lin_cost = np.array(gen_lin_cost)
-    # Normalize costs to O(1)-O(100) to keep the LP well-scaled.
-    if gen_lin_cost.size and gen_lin_cost.max() > 0:
-        gen_lin_cost = gen_lin_cost / max(1.0, np.median(gen_lin_cost[gen_lin_cost > 0]))
+    gen_has_cost = np.array(gen_has_cost, dtype=bool)
+    # Impute missing costs from the median of generators that DO have cost data.
+    # Without this, cases with >50% missing costs get median=default and no normalization,
+    # causing extreme LMPs (e.g., vermont, massachusetts, utah, new_mexico).
+    real_costs = gen_lin_cost[gen_has_cost & (gen_lin_cost > 0)]
+    if real_costs.size > 0:
+        impute_cost = float(np.median(real_costs))
+    else:
+        impute_cost = 1.0
+    gen_lin_cost[~gen_has_cost] = impute_cost
+    # Normalize by median of all costs (now well-defined since imputed values = median).
+    pos_costs = gen_lin_cost[gen_lin_cost > 0]
+    if pos_costs.size > 0:
+        gen_lin_cost = gen_lin_cost / max(1.0, float(np.median(pos_costs)))
 
     if gen_terminals.size:
         generator = Generator(

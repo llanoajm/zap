@@ -1,0 +1,127 @@
+{
+  "experiment": "improve_gen_features",
+  "changes": [
+    "model: gen-aware decoder with pmax_frac + log_pmax_norm per generator",
+    "train: reduced aux cost loss weight 0.5 \u2192 0.1",
+    "train: Adam weight_decay=1e-4",
+    "train: 150 epochs"
+  ],
+  "model": {
+    "hidden_dim": 64,
+    "n_mp_layers": 3,
+    "n_params": 77761
+  },
+  "training": {
+    "n_epochs": 150,
+    "best_epoch": 150,
+    "best_train_loss": 0.7483531692996621,
+    "elapsed_s": 555.1134557723999
+  },
+  "quality_filter": {
+    "train_n_good": 34,
+    "train_filtered_out": [
+      "utah_04h",
+      "utah_16h"
+    ],
+    "test_n_good": 10,
+    "test_filtered_out": []
+  },
+  "train_metrics": {
+    "n_evaluated": 34,
+    "dispatch_mae": {
+      "mean": 0.3574186324557933,
+      "median": 0.2559514790773392
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.20764708721681552,
+      "median": 0.19750937074422836
+    },
+    "cost_gap": {
+      "mean": 0.14775845395529874,
+      "median": 0.042240195458399285
+    },
+    "lmp_mae": {
+      "mean": 0.8201648314099979,
+      "median": 0.2183898538351059
+    },
+    "power_balance_err": {
+      "mean": 5.831497067459848e-08,
+      "median": 6.681580803932732e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.9101749945911365,
+      "median": 0.6512223565287314
+    }
+  },
+  "test_metrics_all10": {
+    "n_evaluated": 10,
+    "dispatch_mae": {
+      "mean": 0.5017156079411507,
+      "median": 0.5442043244838715
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.35833783745765685,
+      "median": 0.34412120282649994
+    },
+    "cost_gap": {
+      "mean": 0.8221006639919107,
+      "median": 0.38673395153597534
+    },
+    "lmp_mae": {
+      "mean": 2.0504452005028724,
+      "median": 1.1265767812728882
+    },
+    "power_balance_err": {
+      "mean": 7.328703129567564e-08,
+      "median": 8.132012949013253e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.9505085035971274,
+      "median": 0.8452041049577301
+    }
+  },
+  "test_metrics_orig8": {
+    "n_evaluated": 8,
+    "dispatch_mae": {
+      "mean": 0.579890763387084,
+      "median": 0.6660305559635162
+    },
+    "dispatch_frac_mae": {
+      "mean": 0.3896317407488823,
+      "median": 0.38644295930862427
+    },
+    "cost_gap": {
+      "mean": 0.8665067490977985,
+      "median": 0.30188061803803296
+    },
+    "lmp_mae": {
+      "mean": 1.2906778175383806,
+      "median": 0.4739212244749069
+    },
+    "power_balance_err": {
+      "mean": 8.312904566643137e-08,
+      "median": 8.830240375105964e-08
+    },
+    "decoder_deviation": {
+      "mean": 0.8428161328735446,
+      "median": 0.7152594438441431
+    }
+  },
+  "checkpoint": "ralph/build/state/checkpoints/design_a_v3.pt",
+  "comparison": {
+    "P3_baseline": {
+      "cost_gap": 0.6337,
+      "lmp_mae": 1.3230536002665758,
+      "n_test": 8
+    },
+    "v2_cost_fix": {
+      "cost_gap_orig8": 0.8665067490977985,
+      "n_test": 10
+    },
+    "v3_gen_features": {
+      "cost_gap_orig8": 0.8665067490977985,
+      "lmp_mae_orig8": 1.2906778175383806,
+      "n_test": 10
+    }
+  }
+}

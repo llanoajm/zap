@@ -220,6 +220,37 @@ Source: `state/improve_v{5-12}_metrics.json`, best checkpoints:
 
 ---
 
+## iter-4 Improvement Summary — Ensemble + Curriculum + New Features
+
+Experiments building on iter-3 best (v9 LMP=0.823, v11 cost_gap=0.025).
+All evaluated on original 8 held-out TEST states unless noted.
+
+| iter | experiment | cost_gap mean | cost_gap med | LMP mean | LMP med | notes |
+|---|---|---|---|---|---|---|
+| iter3 ref | v9 (best LMP) | 0.082 | 0.055 | 0.823 | 0.332 | iter-3 baseline |
+| iter3 ref | v11 (best cost_gap) | 0.025 | 0.010 | 0.926 | 0.350 | iter-3 baseline |
+| iter4a | v13: +res_cap decoder | 0.099 | 0.078 | 0.889 | 0.367 | WORSE (conflicting corr) |
+| iter4b | v14: curriculum W_AUX | — | — | — | — | (running) |
+| iter4c | ensemble α=0.2 (v9+v11) | **0.0206** | 0.014 | 0.926 | 0.388 | **BEST cost_gap** |
+| iter4d | ensemble α=0.5 (v9+v11) | 0.053 | 0.016 | 0.871 | 0.379 | balanced blend |
+
+**v13 (residual capacity): NEGATIVE RESULT**
+- `dc_res_cap_norm = (1-dc_frac) × pmax / max_pmax` added as 2nd decoder scalar
+- State-dependent correlation: Spearman(res_cap, cost) = +0.949 for rhode_island but -0.068 for delaware
+- Cross-state conflicting correlations confuse the model → cost_gap 0.082 → 0.099 (regression)
+- connecticut_16h cost_gap=0.347 (severe regression), LMP still 5.009
+
+**Ensemble (v9 + v11 blend): POSITIVE**
+- Simply averaging predicted costs `pred_cost = α×v9 + (1-α)×v11`, no retraining needed
+- α=0.2 (20% v9, 80% v11): cost_gap=**0.0206** — new overall best (17% better than v11 solo)
+- α=0.5 balanced: cost_gap=0.053, LMP mean=0.871 (trades cost_gap for slightly better LMP)
+- connecticut_16h LMP improves monotonically (4.75-4.98) but all values far above 0.66
+
+Source: `state/improve_v13_metrics.json`, `state/ensemble_v9_v11_metrics.json`,
+`state/improve_v14_metrics.json` (v14 pending).
+
+---
+
 ## iter-4 Ensemble (v9 + v11 cost averaging)
 
 Simple model ensemble: `pred_cost = α × v9_cost + (1-α) × v11_cost`, then solve LP.

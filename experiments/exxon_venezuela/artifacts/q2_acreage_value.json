@@ -1,0 +1,45 @@
+{
+  "as_of": "2026-06-17T04:50:19Z",
+  "scenario_probabilities_used": {
+    "unlocked": 0.75,
+    "frozen": 0.2,
+    "conflict": 0.05
+  },
+  "q1_regime_input": "flat",
+  "exxon_net_disputed_boe_bn": 0.743,
+  "value_if_unlocked_bn_usd": 10.6,
+  "expected_value_bn_usd": 7.87,
+  "essequibo_risk_discount_bn_usd": 2.73,
+  "ev_per_share_usd": 1.83,
+  "unlocked_per_share_usd": 2.47,
+  "monte_carlo": {
+    "n": 20000,
+    "p5_bn": 4.61,
+    "median_bn": 7.63,
+    "p95_bn": 11.66,
+    "relative_ci_width": 0.925
+  },
+  "event_study": {
+    "status": "ok",
+    "benchmark": "BZ=F",
+    "alpha": 0.00135,
+    "beta": 0.519,
+    "event_window_days": [
+      "2026-01-05",
+      "2026-01-06",
+      "2026-01-07",
+      "2026-01-08"
+    ],
+    "cumulative_abnormal_return": -0.0138,
+    "car_pct": -1.38
+  },
+  "mispricing": {
+    "status": "ok",
+    "xom_last": 141.86,
+    "implied_market_cap_bn": 610.0,
+    "market_repriced_bn_event_window": -8.42,
+    "model_risk_discount_bn": 2.73,
+    "market_to_model_ratio": -3.08,
+    "verdict": "UNDERPRICED (market repriced less than model de-risking value)"
+  }
+}

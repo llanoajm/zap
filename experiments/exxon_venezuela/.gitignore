@@ -1,0 +1,4 @@
+# Volatile HTTP cache and loop logs — regenerated on every run.
+artifacts/cache/
+loop/loop.log
+*.tmp

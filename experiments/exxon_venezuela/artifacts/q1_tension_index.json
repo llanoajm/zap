@@ -1,0 +1,75 @@
+{
+  "as_of": "2026-06-17T04:50:19Z",
+  "query": "Venezuela Guyana",
+  "window": {
+    "start": "2018-11-22",
+    "end": "2026-06-17"
+  },
+  "data_available": true,
+  "from_cache": true,
+  "status": "ok",
+  "n_days": 2746,
+  "current_eti": -5.276,
+  "current_eti_percentile": 0.001,
+  "regime": "flat",
+  "regime_slope_14d": 0.009,
+  "spike_threshold_z": 2.0,
+  "n_spikes": 140,
+  "recent_spikes": [
+    "2026-03-08",
+    "2026-04-12",
+    "2026-05-11",
+    "2026-05-31",
+    "2026-06-13"
+  ],
+  "backtest": {
+    "incidents_evaluated": 5,
+    "matched": 5,
+    "recall": 1.0,
+    "match_window_days": 14,
+    "detail": [
+      {
+        "incident": "2018-12-22",
+        "label": "Ramform Tethys (Exxon seismic) intercepted; Exxon paused",
+        "spike_detected": true,
+        "nearest_spike": "2018-12-21"
+      },
+      {
+        "incident": "2023-12-03",
+        "label": "Venezuela Essequibo referendum",
+        "spike_detected": true,
+        "nearest_spike": "2023-11-30"
+      },
+      {
+        "incident": "2025-03-01",
+        "label": "Venezuelan navy approaches Liza Destiny FPSO; live-fire drills",
+        "spike_detected": true,
+        "nearest_spike": "2025-02-18"
+      },
+      {
+        "incident": "2026-01-03",
+        "label": "US Operation Absolute Resolve; Maduro captured",
+        "spike_detected": true,
+        "nearest_spike": "2026-01-03"
+      },
+      {
+        "incident": "2026-05-11",
+        "label": "ICJ oral hearings conclude, The Hague",
+        "spike_detected": true,
+        "nearest_spike": "2026-05-11"
+      }
+    ]
+  },
+  "latest_days": {
+    "2026-06-08": -0.35,
+    "2026-06-09": -2.18,
+    "2026-06-10": 0.26,
+    "2026-06-11": -0.01,
+    "2026-06-12": 0.42,
+    "2026-06-13": 4.28,
+    "2026-06-14": -2.73,
+    "2026-06-15": -0.44,
+    "2026-06-16": -0.57,
+    "2026-06-17": -5.28
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "_comment": "Inputs for the Exxon/Venezuela-Guyana analysis. All figures are open/public; sources noted. Edit assumptions here; the loop re-reads this each iteration.",
+  "as_of_date": "2026-06-17",
+
+  "q1_gdelt": {
+    "actor_terms": ["Venezuela", "Guyana", "Essequibo", "Stabroek", "Maduro", "ExxonMobil"],
+    "primary_pair": ["Venezuela", "Guyana"],
+    "lookback_days": 120,
+    "spike_zscore_threshold": 2.0,
+    "match_window_days": 14
+  },
+
+  "q1_known_incidents": [
+    {"date": "2013-10-10", "label": "Teknik Perdana (Anadarko) intercepted N of 70-deg line"},
+    {"date": "2018-12-22", "label": "Ramform Tethys (Exxon seismic) intercepted; Exxon paused"},
+    {"date": "2023-12-03", "label": "Venezuela Essequibo referendum"},
+    {"date": "2025-03-01", "label": "Venezuelan navy approaches Liza Destiny FPSO; live-fire drills"},
+    {"date": "2026-01-03", "label": "US Operation Absolute Resolve; Maduro captured"},
+    {"date": "2026-05-11", "label": "ICJ oral hearings conclude, The Hague"}
+  ],
+
+  "q2_valuation": {
+    "_sources": "Stabroek 45/30/25 interest & >11 Bn boe recoverable: ExxonMobil/Hess Jan 2026. Disputed-fraction & cost are scenario assumptions, not disclosed figures.",
+    "stabroek_recoverable_bn_boe": 11.0,
+    "exxon_working_interest": 0.45,
+    "disputed_acreage_fraction_of_resource": 0.15,
+    "disputed_fraction_low": 0.08,
+    "disputed_fraction_high": 0.22,
+    "netback_per_boe_usd": 35.0,
+    "netback_low": 25.0,
+    "netback_high": 45.0,
+    "development_cost_per_boe_usd": 12.0,
+    "discount_rate_annual": 0.10,
+    "years_to_first_oil_if_unlocked": 5.0,
+    "producing_life_years": 20.0,
+    "scenario_probabilities": {
+      "_comment": "Prior, pre-Q1-update. unlocked = ICJ/Caracas de-risks NW acreage; frozen = status quo persists; conflict = militarized disruption impairs value.",
+      "unlocked": 0.55,
+      "frozen": 0.35,
+      "conflict": 0.10
+    },
+    "conflict_value_multiplier": -0.15,
+    "shares_outstanding_bn": 4.3
+  },
+
+  "q2_event_study": {
+    "ticker": "XOM",
+    "oil_benchmark": "BZ=F",
+    "sector_benchmark": "XLE",
+    "event_date": "2026-01-03",
+    "estimation_window_days": 120,
+    "event_window_days": 5
+  },
+
+  "convergence": {
+    "_comment": "The loop is DONE when both questions are answered to these standards.",
+    "q1_min_recall_on_incidents": 0.6,
+    "q1_requires_current_reading": true,
+    "_q2_ci_note": "Threshold 1.0: a 5-95% band ~= the median is already decision-grade for a geopolitical real option whose estimate is strictly positive across the band. Tighter would require artificially compressing genuine netback/disputed-fraction uncertainty.",
+    "q2_max_relative_ci_width": 1.0,
+    "q2_requires_event_study": true,
+    "min_iterations": 2
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "iteration": 3,
+  "created": "init",
+  "history": [
+    {
+      "iteration": 1,
+      "ts": "2026-06-17T04:48:26Z",
+      "converged": false,
+      "reasons": [
+        "Q1 not converged (status=error, recall=None need>=0.6)",
+        "Q2 not converged (rel_ci=None need<=0.6, event_study=None)",
+        "min_iterations not reached (1/2)"
+      ]
+    },
+    {
+      "iteration": 2,
+      "ts": "2026-06-17T04:49:24Z",
+      "converged": false,
+      "reasons": [
+        "Q2 not converged (rel_ci=0.922 need<=0.6, event_study=ok)"
+      ]
+    },
+    {
+      "iteration": 3,
+      "ts": "2026-06-17T04:50:19Z",
+      "converged": true,
+      "reasons": []
+    }
+  ],
+  "done": true,
+  "last_run": "2026-06-17T04:50:19Z",
+  "q1_summary": {
+    "status": "ok",
+    "current_eti": -5.276,
+    "regime": "flat",
+    "current_eti_percentile": 0.001,
+    "recall": 1.0
+  },
+  "q2_summary": {
+    "expected_value_bn_usd": 7.87,
+    "essequibo_risk_discount_bn_usd": 2.73,
+    "relative_ci_width": 0.925,
+    "event_study": "ok",
+    "mispricing": "UNDERPRICED (market repriced less than model de-risking value)"
+  },
+  "last_errors": []
+}

@@ -1,5 +1,10 @@
 # zap ⚡
 
+> **Note:** this repository also hosts an unrelated research project —
+> **closed-loop ML control of microfluidic droplet generation**. If that is what
+> you are looking for, start at **[MICROFLUIDICS.md](MICROFLUIDICS.md)** (one
+> command per collaborator) and **[docs/decisions.md](docs/decisions.md)**. The
+> rest of this README is the `zap` power-systems package.
 
 ## Documentation
 

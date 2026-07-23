@@ -18,3 +18,19 @@ build/
 # Test outputs
 zap/tests/**/*.csv
 zap/tests/**/*.png
+
+# --- microfluidics project: regenerable artifacts & third-party data ---
+models/exported/
+models/profiling.json
+models/profile.json
+bench/results.json
+normalization/data/
+normalization/artifacts/
+synthetic/out/
+__pycache__/
+*.pyc
+
+# but DO track the microfluidics device matrix (deliverable) despite data/ ignore
+!/data/
+!/data/build_device_matrix.py
+!/data/device_matrix.csv
